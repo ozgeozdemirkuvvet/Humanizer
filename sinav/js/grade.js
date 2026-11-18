@@ -64,6 +64,7 @@ export async function gradePaper({ exam, layout, pages, ai, prefs = [], encode, 
   if (!evaluation && !result.feedback) result.feedback = localFeedback(exam, result, lang);
   return {
     reading: { omr, regions, answers },
+    evaluation: evaluation ? { ...evaluation, model: undefined, cached: undefined } : null,
     ...result,
     model: evalModel || readModel || null,
     status: 'degerlendirildi'
