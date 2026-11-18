@@ -4,7 +4,16 @@ updates:
     directory: /
     schedule: { interval: monthly }
     groups:
-      dev: { patterns: ["*"] }
+      dev:
+        patterns: ["*"]
+        update-types: [minor, patch]
+    # Büyük sürümler (ör. ESLint 10) yapılandırma değişikliği ister; elle yükseltilir
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
+    groups:
+      actions:
+        patterns: ["*"]
