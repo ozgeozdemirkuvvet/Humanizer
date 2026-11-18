@@ -486,7 +486,7 @@ const DYN = {
     numbers: 'Sayı', quotes: 'Alıntı', urls: 'Bağlantı/e-posta', names: 'Özel ad', cites: 'Kaynak', apiNeeded: 'Bu işlem için Ayarlar’dan API anahtarı girin.',
     docxDone: 'Temiz dosya indirildi', docxFound: 'Bulunan ve silinen bilgiler', docxNone: 'Kişisel meta veri bulunamadı; dosya yine de normalleştirildi.',
     loadedDocx: 'Belgedeki metin yüklendi.', libFail: 'Kütüphane yüklenemedi (internet bağlantısı gerekli).', settingsSaved: 'Ayarlar kaydedildi.',
-    rwSoon: 'Yeniden yazma motoru henüz eklenmedi.', formalLabels: ['Çok samimi', 'Samimi', 'Dengeli', 'Resmî', 'Çok resmî'],
+    formalLabels: ['Çok samimi', 'Samimi', 'Dengeli', 'Resmî', 'Çok resmî'],
     addrSiz: 'siz (resmî)', addrSen: 'sen (samimi)', addrMixed: 'karışık', addrYou: 'you', addrUnknown: 'belirsiz', firstPerson: 'Birinci tekil şahıs (100 kelimede)',
     quoteStyle: 'Tırnak tercihi', curly: 'kıvrık “ ”', straight: 'düz " "', guillemet: '« »', paragraphs: 'Paragraf başına cümle', shortLong: 'Kısa (<8) / uzun (>25) cümle oranı'
   },
@@ -507,7 +507,7 @@ const DYN = {
     numbers: 'Number', quotes: 'Quote', urls: 'Link/email', names: 'Proper name', cites: 'Citation', apiNeeded: 'Enter an API key in Settings for this.',
     docxDone: 'Clean file downloaded', docxFound: 'Found and removed', docxNone: 'No personal metadata found; the file was normalized anyway.',
     loadedDocx: 'Document text loaded.', libFail: 'Library failed to load (internet connection needed).', settingsSaved: 'Settings saved.',
-    rwSoon: 'Rewrite engine not added yet.', formalLabels: ['Very casual', 'Casual', 'Balanced', 'Formal', 'Very formal'],
+    formalLabels: ['Very casual', 'Casual', 'Balanced', 'Formal', 'Very formal'],
     addrSiz: 'siz (formal)', addrSen: 'sen (informal)', addrMixed: 'mixed', addrYou: 'you', addrUnknown: 'unclear', firstPerson: 'First person singular (per 100 words)',
     quoteStyle: 'Quote style', curly: 'curly “ ”', straight: 'straight " "', guillemet: '« »', paragraphs: 'Sentences per paragraph', shortLong: 'Short (<8) / long (>25) sentence share'
   }
@@ -1068,9 +1068,185 @@ function download(blob, name) {
 /* ============================================================================
    3. YENİDEN YAZMA MOTORU
    ========================================================================== */
-/* === REWRITE ENGINE (2. aşama) === */
-async function rewrite() { toast(D('rwSoon')); }
-async function aiMeaningCheck() { toast(D('rwSoon')); }
+/*
+  Claude API'si tarayıcıdan, kullanıcının kendi anahtarıyla, resmî Anthropic
+  TypeScript/JS SDK'sı üzerinden çağrılır (sabit sürüm, yalnızca gerektiğinde yüklenir).
+  - Varsayılan model: Claude Opus 5.5 (Ayarlar'dan değiştirilebilir).
+  - Akış (streaming) kullanılır: uzun metinlerde zaman aşımı olmaz, çıktı canlı görünür.
+  - Opus 5.5 / Sonnet 5.5'te sunucu tarafı yedek model ("fallbacks: default") açıktır:
+    güvenlik sınıflandırıcısı isteği reddederse API isteği uygun bir modelle tamamlar.
+*/
+const SDK_URL = 'https://cdn.jsdelivr.net/npm/@anthropic-ai/sdk@1.3.0/+esm';
+let sdkP = null;
+function loadSDK() {
+  return sdkP ||= import(SDK_URL).then(m => m.Anthropic ?? m.default).catch(() => { sdkP = null; throw new Error(D('libFail')); });
+}
+async function getClient() {
+  const key = store.get('apiKey', '');
+  if (!key) { $('#btnSettings').click(); throw new Error(D('apiNeeded')); }
+  const Anthropic = await loadSDK();
+  return { Anthropic, client: new Anthropic({ apiKey: key, dangerouslyAllowBrowser: true }) };
+}
+const MODEL = () => store.get('model', 'claude-opus-5-5');
+/** Sunucu tarafı yedek model yalnızca bunu destekleyen modellerde eklenir. */
+function withFallbacks(params) {
+  if (['claude-opus-5-5', 'claude-sonnet-5-5'].includes(params.model)) {
+    params.betas = ['server-side-fallback-2026-07-01'];
+    params.fallbacks = 'default';
+  }
+  return params;
+}
+/** SDK hata sınıflarını kullanıcıya anlaşılır mesaja çevirir (en özelden en genele). */
+function apiErrorMessage(Anthropic, e) {
+  const en = UI === 'en';
+  if (Anthropic && e instanceof Anthropic.APIUserAbortError) return en ? 'Stopped.' : 'Durduruldu.';
+  if (Anthropic && e instanceof Anthropic.AuthenticationError) return en ? 'Invalid API key (401). Check Settings.' : 'API anahtarı geçersiz (401). Ayarları kontrol edin.';
+  if (Anthropic && e instanceof Anthropic.PermissionDeniedError) return en ? 'This key has no access to the selected model (403).' : 'Bu anahtarın seçili modele erişimi yok (403).';
+  if (Anthropic && e instanceof Anthropic.NotFoundError) return en ? 'Model not found (404). Pick another model in Settings.' : 'Model bulunamadı (404). Ayarlardan başka bir model seçin.';
+  if (Anthropic && e instanceof Anthropic.RateLimitError) return en ? 'Rate limit reached (429). Wait a bit and try again.' : 'Hız sınırına ulaşıldı (429). Biraz bekleyip yeniden deneyin.';
+  if (Anthropic && e instanceof Anthropic.BadRequestError) return (en ? 'Request rejected (400): ' : 'İstek reddedildi (400): ') + (e.error?.error?.message || e.message);
+  if (Anthropic && e instanceof Anthropic.APIConnectionError) return en ? 'Could not reach the API (network / CORS).' : 'API’ye ulaşılamadı (ağ bağlantısı).';
+  if (Anthropic && e instanceof Anthropic.APIError) return `API ${e.status ?? ''}: ${e.message}`;
+  return e.message || String(e);
+}
+
+const TONES = {
+  resmi: 'Official correspondence (e.g. to/from a Turkish Ministry of Education (MEB) unit, school administration or another institution). Keep the conventions the genre really needs (respectful address such as "Sayın …", the closing formula such as "Gereğini bilgilerinize arz ederim" when the original has one) but write like an experienced civil servant/teacher, not a template: clear, direct, no decorative clichés, no inflated adjectives.',
+  akademik: 'Academic writing. Precise and measured, but in a real researcher\'s voice: clear claims, concrete references to the given data and sources, active voice where natural, varied sentence rhythm. No grand openings ("Günümüzde…", "In today\'s world…"), no empty summary paragraph. Keep all citations exactly.',
+  proje: 'Project application (Erasmus+, eTwinning or similar). Concrete and believable: who does what, when, with which students, and what the measurable output is. Use "we" (biz) for the project team. Replace buzzwords (sinerji, çok yönlü, kapsamlı, innovative, holistic) with specifics from the text, or a placeholder where the specifics are missing. Evaluators read hundreds of these: sound like a real teacher who has actually planned this.',
+  samimi: 'Friendly email to a colleague or acquaintance. Warm, natural, a bit conversational; short paragraphs; contractions in English; in Turkish use the address form (siz/sen) the writer uses. Get to the point quickly.',
+  ogrenci: 'Text written by a student (high-school or early university). Simpler vocabulary, some shorter sentences, honest personal reactions ("bence", "I think"), less polished transitions. It must not be sloppy or full of errors, just not over-polished.'
+};
+const INTENSITY = {
+  hafif: 'LIGHT TOUCH: keep the original structure, paragraph order and most sentences. Only fix the AI fingerprints: replace clichés, break a few monotonous sentences (split one, merge two), remove formatting leftovers, cut empty hedges. Roughly 60–75% of the wording should stay.',
+  orta: 'MEDIUM: keep the paragraph order and every point, but rephrase freely sentence by sentence, restructure monotonous paragraphs, vary rhythm clearly, and add the writer\'s voice where it fits.',
+  bastan: 'FULL REWRITE: rewrite from scratch as the writer would have written it on their own. You may reorder, merge or split paragraphs and choose a different opening, as long as every fact, claim, number, name, source and quotation is preserved.'
+};
+
+function buildSystemPrompt() {
+  return `You are an experienced editor who turns AI-generated or AI-assisted texts (Turkish or English) into text that reads as if a specific real person wrote it, without changing what it says.
+
+Non-negotiable rules:
+1. Preserve meaning. Keep every fact, claim, number, percentage, date, proper name, institution, source, citation, URL and direct quotation. Quotations stay word for word. Numbers stay as they are.
+2. Never invent anything: no new facts, statistics, names, dates, sources, anecdotes or examples presented as real. Where a concrete detail or a personal touch would clearly help and the text does not provide it, insert a short placeholder in square brackets in the output language, for example [buraya kendi örneğini ekle], [okulun adı], [tarih] or [add your own example here]. Use placeholders sparingly (at most one per paragraph).
+3. Vary sentence length clearly and unevenly: mix short sentences (3–8 words) with medium and occasionally long ones. Avoid runs of sentences of similar length, and do not start consecutive sentences with the same word.
+4. Replace AI clichés with plain, natural wording or simply drop them. Turkish examples: "Ayrıca", "Sonuç olarak", "önemli bir rol oynamaktadır", "günümüzde", "bu bağlamda", "kapsamlı", "çok yönlü", "büyük önem taşımaktadır", "katkı sağlamaktadır", "son derece". English examples: "delve", "tapestry", "crucial", "pivotal", "in today's fast-paced world", "it's worth noting", "furthermore", "moreover", "seamless", "robust", "leverage".
+5. Break the symmetry: avoid reflexive three-item lists ("X, Y and Z") unless the content really has exactly three items; paragraphs should differ in length; no "not only… but also" stacking; no generic, empty concluding paragraph (if the last paragraph only summarises, shorten it to one concrete sentence or drop it).
+6. Cut empty hedging ("olabilir", "genellikle", "might", "generally") where the text is stating something the writer actually knows; keep hedges that express real uncertainty.
+7. Plain text only. No Markdown, no bold or italics, no headings, no bullet points unless the original is genuinely a list that must stay a list. Do not use em dashes (—); use commas, full stops, colons, parentheses or a plain hyphen instead. Use one consistent quotation-mark style. No invisible or zero-width characters.
+8. Write in the requested output language, with natural grammar and idiom for that language (for Turkish: natural Turkish word order and suffixes, not translated-from-English phrasing).
+9. Output ONLY the rewritten text. No title, no preface, no explanation, no notes after the text.`;
+}
+
+function buildUserPrompt(text, opts, res) {
+  const prof = store.get('profile');
+  const samples = (store.get('samples', []) || []).map(s => s.trim()).filter(Boolean);
+  const outLang = opts.outLang === 'auto' ? (res.lang === 'tr' ? 'Turkish' : 'English') : opts.outLang === 'tr' ? 'Turkish' : 'English';
+  const found = [...new Set(res.spans.filter(s => s.cat === 'cliche').map(s => text.slice(s.start, s.end)))].slice(0, 25);
+  const parts = [];
+  parts.push(`<task>
+Output language: ${outLang}
+Tone / genre: ${TONES[opts.tone]}
+Intensity: ${INTENSITY[opts.intensity]}${opts.note ? `\nExtra instruction from the writer: ${opts.note}` : ''}
+</task>`);
+  if (prof) {
+    parts.push(`<writer_style_profile>
+Measured from the writer's own texts. Match these habits (as far as the tone/genre allows), especially sentence-length mean and variation, connectors, address form, punctuation and formality:
+${profileToPrompt(prof)}
+</writer_style_profile>`);
+    if (samples.length) {
+      parts.push(`<writer_samples>
+Short excerpts of the writer's own writing, for voice only. Do NOT copy their content or facts into the rewrite.
+${samples.slice(0, 5).map((s, i) => `<sample n="${i + 1}">\n${s.slice(0, 900)}\n</sample>`).join('\n')}
+</writer_samples>`);
+    }
+  } else {
+    parts.push('<writer_style_profile>No profile saved. Use a natural, unpretentious human voice suitable for the tone.</writer_style_profile>');
+  }
+  parts.push(`<analysis_of_original>
+Detected AI-fingerprint scores (0–100, higher = more AI-like): ${CATS.map(c => `${c.id} ${res.scores[c.id].score ?? 'n/a'}`).join(', ')}.
+Sentence-length notes: ${res.scores.burst.why}.
+Clichés found: ${found.join(' | ') || 'none'}.
+</analysis_of_original>`);
+  parts.push(`<text_to_rewrite>\n${text}\n</text_to_rewrite>`);
+  return parts.join('\n\n');
+}
+
+let ACTIVE_STREAM = null;
+async function rewrite() {
+  const text = cleanText($('#inputText').value, { invis: true, nbsp: true }).text;
+  if (!text.trim()) { toast(D('emptyText')); switchTab('analyze'); return; }
+  let Anthropic, client;
+  try { ({ Anthropic, client } = await getClient()); } catch (e) { toast(e.message); return; }
+
+  const res = analyze(text);
+  const opts = { tone: segValue('toneSeg'), intensity: segValue('intSeg'), outLang: segValue('outLangSeg'), note: $('#rwNote').value.trim() };
+  const out = $('#rwStream'), status = $('#rwStatus');
+  out.textContent = ''; $('#btnRewrite').disabled = true; $('#btnStop').hidden = false;
+  status.textContent = UI === 'en' ? 'Thinking…' : 'Düşünüyor…';
+  let acc = '';
+  try {
+    const params = withFallbacks({
+      model: MODEL(),
+      max_tokens: 64000,
+      // Opus 5.5'te düşünme her zaman açıktır; derinlik "effort" ile ayarlanır.
+      output_config: { effort: opts.intensity === 'bastan' ? 'high' : 'medium' },
+      system: buildSystemPrompt(),
+      messages: [{ role: 'user', content: buildUserPrompt(text, opts, res) }]
+    });
+    const stream = ACTIVE_STREAM = client.beta.messages.stream(params);
+    stream.on('text', delta => {
+      if (!acc) status.textContent = UI === 'en' ? 'Writing…' : 'Yazıyor…';
+      acc += delta; out.textContent = acc; out.scrollTop = out.scrollHeight;
+    });
+    const msg = await stream.finalMessage();
+    if (msg.stop_reason === 'refusal') {
+      status.textContent = (UI === 'en' ? 'The model declined this request' : 'Model bu isteği reddetti') + (msg.stop_details?.category ? ` (${msg.stop_details.category})` : '') + '.';
+      return;
+    }
+    let result = msg.content.filter(b => b.type === 'text').map(b => b.text).join('').trim();
+    // Güvenlik ağı: modelin eklemiş olabileceği görünmez karakter/bölünemez boşlukları temizle
+    result = cleanText(result, { invis: true, nbsp: true }).text;
+    if (msg.stop_reason === 'max_tokens') toast(UI === 'en' ? 'Output hit the length limit; the end may be missing.' : 'Çıktı uzunluk sınırına ulaştı; son kısım eksik olabilir.');
+    const after = analyze(result, res.lang);
+    status.textContent = `${D('score')}: ${res.overall} → ${after.overall}` + (msg.model && msg.model !== params.model ? ` · ${msg.model}` : '');
+    addHistory({ original: text, result, scoreBefore: res.overall, scoreAfter: after.overall, tone: $(`#toneSeg [data-v="${opts.tone}"]`).textContent });
+    openCompare(text, result);
+  } catch (e) {
+    status.textContent = apiErrorMessage(Anthropic, e);
+  } finally {
+    ACTIVE_STREAM = null; $('#btnRewrite').disabled = false; $('#btnStop').hidden = true;
+  }
+}
+$('#btnStop').onclick = () => ACTIVE_STREAM?.abort();
+
+/**
+ * Yapay zekâ destekli anlam kontrolü: iki metni karşılaştırır, kaybolan / değişen /
+ * eklenen bilgileri JSON olarak döndürmesini ister. Yerel kontrolü tamamlar.
+ */
+async function aiMeaningCheck() {
+  if (!CMP) return;
+  let Anthropic, client;
+  try { ({ Anthropic, client } = await getClient()); } catch (e) { toast(e.message); return; }
+  const box = $('#aiMeaningOut'), btn = $('#btnAiMeaning');
+  btn.disabled = true; box.innerHTML = `<p class="muted">${UI === 'en' ? 'Checking…' : 'Kontrol ediliyor…'}</p>`;
+  try {
+    const msg = await client.beta.messages.stream(withFallbacks({
+      model: MODEL(), max_tokens: 16000, output_config: { effort: 'medium' },
+      system: 'You compare an original text with its rewrite and report only real changes in information. Ignore changes of style, wording, order or tone. Report: facts/claims/numbers/names/sources/quotes that are missing from the rewrite, that changed meaning, or that were added (invented) in the rewrite. Bracketed placeholders like [buraya kendi örneğini ekle] are allowed and are not additions. Reply with JSON only, no code fences: {"issues":[{"type":"missing"|"changed"|"added","original":"short quote from original or empty","rewrite":"short quote from rewrite or empty","note":"one short sentence"}]}. Write "note" in ' + (UI === 'en' ? 'English' : 'Turkish') + '. Return {"issues":[]} if nothing is lost or invented.',
+      messages: [{ role: 'user', content: `<original>\n${CMP.original}\n</original>\n\n<rewrite>\n${mergedText()}\n</rewrite>` }]
+    })).finalMessage();
+    if (msg.stop_reason === 'refusal') { box.innerHTML = `<div class="warn">${UI === 'en' ? 'The model declined.' : 'Model isteği reddetti.'}</div>`; return; }
+    const raw = msg.content.filter(b => b.type === 'text').map(b => b.text).join('');
+    const json = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    const label = { missing: UI === 'en' ? 'Missing' : 'Kayıp', changed: UI === 'en' ? 'Changed' : 'Değişmiş', added: UI === 'en' ? 'Added' : 'Eklenmiş' };
+    box.innerHTML = !json.issues?.length
+      ? `<div class="okmsg">${UI === 'en' ? 'AI check: no lost, changed or invented information found.' : 'Yapay zekâ kontrolü: kaybolan, değişen ya da uydurulan bilgi bulunmadı.'}</div>`
+      : json.issues.map(i => `<div class="warn"><b>${esc(label[i.type] || i.type)}:</b> ${esc(i.note || '')}${i.original ? `<br><span class="muted">${(UI === 'en' ? 'Original' : 'Orijinal')}:</span> <q>${esc(i.original)}</q>` : ''}${i.rewrite ? `<br><span class="muted">→</span> <q>${esc(i.rewrite)}</q>` : ''}</div>`).join('');
+  } catch (e) {
+    box.innerHTML = `<div class="warn">${esc(e instanceof SyntaxError ? (UI === 'en' ? 'Could not read the model\'s answer.' : 'Modelin yanıtı okunamadı.') : apiErrorMessage(Anthropic, e))}</div>`;
+  } finally { btn.disabled = false; }
+}
 
 /* ============================================================================
    4. KARŞILAŞTIRMA: diff, kabul/ret, skor değişimi, anlam kontrolü
