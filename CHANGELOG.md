@@ -12,7 +12,7 @@ Biçim [Keep a Changelog](https://keepachangelog.com/tr-TR/1.1.0/) esas alınara
 - Mimari belgesi, katkı rehberi, güvenlik politikası, issue ve PR şablonları, demo GIF.
 
 ### Değişti
-- Proje MIT lisansıyla yayımlandı.
+- Lisans "Tüm hakları saklıdır" olarak belirlendi: kaynak kodu yalnızca incelenmek için görünür.
 - Vurgulama tarama çizgisi algoritmasına geçti: 20.000 kelimede analiz ve çizim 406 ms'den 261 ms'ye indi.
 
 ### Düzeltildi

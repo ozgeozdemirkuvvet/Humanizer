@@ -1,21 +1,52 @@
-MIT License
+Copyright (c) 2026 Özge ÖZDEMİR KUVVET. Tüm hakları saklıdır.
 
-Copyright (c) 2026 Özge ÖZDEMİR KUVVET
+Bu depodaki kaynak kodu, belgeler, görseller ve diğer tüm içerik
+Özge ÖZDEMİR KUVVET'e aittir ve yalnızca incelenmek amacıyla herkese
+açık olarak yayımlanmıştır.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Telif sahibinin önceden verilmiş yazılı izni olmadan bu içeriğin tamamı
+ya da bir kısmı kopyalanamaz, çoğaltılamaz, değiştirilemez, uyarlanamaz,
+yayımlanamaz, dağıtılamaz, alt lisanslanamaz, satılamaz ve ticari ya da
+ticari olmayan başka bir ürün veya hizmette kullanılamaz.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+İzin verilenler:
+  - Kaynak kodu GitHub üzerinde görüntülemek ve incelemek.
+  - GitHub Hizmet Şartları'nın platform içinde tanıdığı haklar
+    (depoyu GitHub arayüzünde görüntüleme ve fork etme). Bu, fork edilen
+    kopyanın başka bir amaçla kullanılmasına izin vermez.
+  - Telif sahibinin yayımladığı canlı uygulamayı
+    (https://ozgeozdemirkuvvet.github.io/Humanizer/) kişisel amaçla
+    kullanmak.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+İzin talepleri için GitHub üzerinden telif sahibiyle iletişime geçiniz.
+
+YAZILIM "OLDUĞU GİBİ" SUNULUR; AÇIK YA DA ZIMNİ HİÇBİR GARANTİ VERİLMEZ.
+TELİF SAHİBİ, YAZILIMIN KULLANIMINDAN DOĞAN HİÇBİR ZARARDAN SORUMLU
+TUTULAMAZ.
+
+-------------------------------------------------------------------------
+
+Copyright (c) 2026 Özge ÖZDEMİR KUVVET. All rights reserved.
+
+The source code, documentation, images and all other content in this
+repository are owned by Özge ÖZDEMİR KUVVET and are published publicly
+for viewing purposes only.
+
+Without the prior written permission of the copyright holder, no part of
+this content may be copied, reproduced, modified, adapted, published,
+distributed, sublicensed, sold, or used in any other commercial or
+non-commercial product or service.
+
+Permitted:
+  - Viewing and reviewing the source code on GitHub.
+  - The rights granted within the platform by the GitHub Terms of Service
+    (viewing and forking the repository on GitHub). This does not permit
+    using a forked copy for any other purpose.
+  - Using the live application published by the copyright holder
+    (https://ozgeozdemirkuvvet.github.io/Humanizer/) for personal use.
+
+To request permission, contact the copyright holder via GitHub.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS
+OR IMPLIED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+DAMAGES ARISING FROM THE USE OF THE SOFTWARE.
