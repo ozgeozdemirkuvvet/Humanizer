@@ -27,7 +27,7 @@ jobs:
           mkdir -p _site/docs
           cp index.html sw.js manifest.webmanifest icon.svg _site/
           cp -r docs/screenshots _site/docs/
-      - uses: actions/configure-pages@v5
+      - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
