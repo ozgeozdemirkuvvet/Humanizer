@@ -1,7 +1,7 @@
 // e-Okul not listesi ve sınıf listesi (CSV).
 // Türkçe Excel ";" ayracını ve UTF-8 BOM'u bekler; yoksa "Ş, ğ, ı" bozuk görünür.
 
-const BOM = '﻿';
+const BOM = '\uFEFF';
 
 function cell(v) {
   const s = String(v ?? '');
@@ -29,7 +29,7 @@ export function eOkulCSV(exam, papers) {
 
 /** Basit CSV ayrıştırıcı: ";" ya da "," ayraç, tırnaklı alan, BOM. */
 export function parseCSV(text) {
-  const t = String(text).replace(/^﻿/, '');
+  const t = String(text).replace(/^\uFEFF/, '');
   const first = t.split(/\r?\n/, 1)[0] || '';
   const sep = (first.match(/;/g) || []).length >= (first.match(/,/g) || []).length ? ';' : ',';
   const rows = [];

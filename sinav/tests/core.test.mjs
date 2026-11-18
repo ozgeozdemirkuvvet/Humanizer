@@ -89,7 +89,7 @@ test('hata kağıda bağlanır: kelime kutusu sayfa koordinatına çevrilir; bul
   assert.equal(text, 'Yesterday she go to school');
   assert.deepEqual(spanBox(region.lines[0].words, locateQuote(text, 'go')), [200, 100, 280, 300]);
   const e = anchorError({ line: 1, quote: 'go', code: 'T' }, region);
-  assert.deepEqual(e.box, { x: 300, y: 1050, w: 80, h: 100 });
+  assert.deepEqual(e.box, { x: 300, y: 1050, w: 80, h: 100, page: 1 });
   const bad = anchorError({ line: 1, quote: 'went', code: 'T' }, region);
   assert.equal(bad.certain, false);
   assert.match(bad.uncertainReason, /bulunamadı/);

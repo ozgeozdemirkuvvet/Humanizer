@@ -3,7 +3,7 @@
 // Saf fonksiyon: aynı girdiye her zaman aynı çıktı (tutarlılık + test edilebilirlik).
 
 import { scoreClosed, scoreGap, scoreWriting, totals, countWords } from './scoring.js';
-import { anchorError, numberErrors, missingFields, markUncertain, lineLayout } from './errors.js';
+import { anchorError, numberErrors, missingFields, markUncertain, lineLayout, toPageBox } from './errors.js';
 import { CODES, QUESTION_TYPES } from './codes.js';
 
 const ILLEGIBLE = '[okunamadı]';
@@ -53,7 +53,8 @@ export function assemble({ exam, omr = [], regions = [], answers = [], evaluatio
   const readingFlags = [];
   const rules = [...(evaluation?.rules || [])];
   const note = qid => evaluation?.answerNotes?.find(n => n.questionId === qid);
-  const regionOf = qid => regions.find(r => r.questionId === qid);
+  const merged = mergeRegions(regions);
+  const regionOf = qid => merged.find(r => r.questionId === qid);
 
   for (const q of exam.questions) {
     if (QUESTION_TYPES[q.type]?.closed) {
@@ -68,7 +69,7 @@ export function assemble({ exam, omr = [], regions = [], answers = [], evaluatio
       const read = reg ? gapReading(reg) : toGapReading(answers.find(a => a.questionId === q.id));
       const { score, match } = scoreGap(q, read, exam.spelling);
       scores.push(score);
-      const box = reg ? { x: reg.rect.x + 8, y: reg.rect.y + 8, w: reg.rect.w - 16, h: reg.rect.h - 16 } : answerBox(q.id, null);
+      const box = reg ? { x: reg.rect.x + 8, y: reg.rect.y + 8, w: reg.rect.w - 16, h: reg.rect.h - 16, page: reg.page ?? 1 } : answerBox(q.id, null);
       if (match.kind === 'yanlis' || match.kind === 'bos') raw.push(gapError(q, read, score, note(q.id), box, match, lang));
       else if (match.kind === 'yazim') raw.push(spellingError(q, read, match, box, lang));
       else if (match.kind === 'okunamadi') readingFlags.push({ questionId: q.id, line: null, text: ILLEGIBLE, confidence: read.confidence, box });
@@ -103,12 +104,11 @@ export function assemble({ exam, omr = [], regions = [], answers = [], evaluatio
         const a = anchorError({ ...s, questionId: q.id, kind: 'suggestion' }, reg, bands);
         suggestions.push({ ...a, kind: 'suggestion' });
       }
-      for (const l of reg.lines) l.words.forEach(w => {
+      for (const l of reg.lines) l.words.forEach((w, wi) => {
         if (w.confidence < REVIEW_BELOW) {
-          const lb = l.words.indexOf(w);
           const b = Array.isArray(w.box) ? w.box : null;
-          readingFlags.push({ questionId: q.id, line: l.n, text: w.text, confidence: w.confidence, wordIndex: lb,
-            box: b ? { x: reg.rect.x + b[0] / 1000 * reg.rect.w, y: reg.rect.y + b[1] / 1000 * reg.rect.h, w: (b[2] - b[0]) / 1000 * reg.rect.w, h: (b[3] - b[1]) / 1000 * reg.rect.h } : null });
+          readingFlags.push({ questionId: q.id, line: l.n, text: w.text, confidence: w.confidence, wordIndex: wi, guess: w.guess,
+            box: b ? { ...toPageBox(l.rect || reg.rect, b), page: l.page ?? reg.page ?? 1 } : null });
         }
       });
     }
@@ -129,6 +129,22 @@ export function assemble({ exam, omr = [], regions = [], answers = [], evaluatio
     total,
     needsReview: scores.some(s => s.needsReview) || errors.some(e => e.certain === false) || readingFlags.length > 0
   };
+}
+
+/**
+ * Aynı sorunun birden fazla sayfaya yayılan bölgelerini tek mantıksal bölgede birleştirir.
+ * Her satır kendi sayfa ve dikdörtgen bilgisini taşır (kutu dönüşümü için).
+ */
+export function mergeRegions(regions) {
+  const out = [];
+  for (const r of regions) {
+    const lines = (r.lines || []).map(l => ({ ...l, rect: l.rect || r.rect, page: l.page ?? r.page ?? 1 }));
+    const prev = out.find(x => x.questionId === r.questionId);
+    if (prev) prev.lines.push(...lines);
+    else out.push({ ...r, lines });
+  }
+  for (const r of out) r.lines.sort((a, b) => a.n - b.n);
+  return out;
 }
 
 function toOmrLike(a) {

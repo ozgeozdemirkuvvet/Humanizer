@@ -104,12 +104,14 @@ export function anchorError(err, region, lineBands) {
     return markUncertain(out, `“${err.quote}” ifadesi ${err.line}. satırda bulunamadı`);
   }
   out.span = span;
+  const rect = line.rect || region.rect; // çok sayfalı writing'de her satır kendi bölgesini taşır
   const b = spanBox(line.words, span);
-  if (b) out.box = toPageBox(region.rect, b);
+  if (b) out.box = toPageBox(rect, b);
   else {
     const band = lineBands?.find(x => x.n === err.line);
-    out.box = band ? estimateBox(region.rect, band, text, span) : null;
+    out.box = band ? estimateBox(rect, band, text, span) : null;
   }
+  if (out.box) out.box.page = line.page ?? region.page ?? 1;
   // [okunamadı] kelimesine dayanan bir hata kesin olamaz
   if (/\[okunamad[ıi]\]/i.test(text.slice(span.start, span.end))) markUncertain(out, 'Hata okunamayan bir kelimeye dayanıyor');
   return out;
