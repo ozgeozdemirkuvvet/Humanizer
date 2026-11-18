@@ -259,7 +259,7 @@ export async function renderReview(exam, paperId, { mount, app }) {
       h('div.card.grid',
         h('div.row', h('div', h('div.small.muted', 'Toplam'), h('div.score-big', String(paper.total.grade100)), h('div.small.muted', `${fmt(paper.total.earned)} / ${fmt(paper.total.max)} puan`)), h('span.spacer'),
           h(`span.chip.${STATUS[paper.status]?.[1] || ''}`, STATUS[paper.status]?.[0])),
-        h('div.row', h('b', 'Öğrenci'), noIn, nameSel || nameIn, h('button.btn.sm', { onclick: saveId }, st.confirmed ? 'Güncelle' : 'Onayla'), st.confirmed ? h('span.chip.ok', 'onaylı') : h('span.chip.warn', 'onay bekliyor')),
+        h('div.row', h('b', 'Öğrenci'), noIn, nameSel || nameIn, h('button.btn.sm', { onclick: saveId }, st.confirmed ? 'Kimliği güncelle' : 'Kimliği onayla'), st.confirmed ? h('span.chip.ok', 'onaylı') : h('span.chip.warn', 'onay bekliyor')),
         ...warnings.map(w => h('div.notice.small', w))),
       h('div.card', h('h3', 'Soru puanları'), exam.questions.map(q => scoreRow(q))));
   }

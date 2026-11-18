@@ -45,6 +45,14 @@ const WRITING = ['Last summer I go to Antalya with my family', 'We swim in the s
 function mockReply(body) {
   const user = body.messages[0].content;
   const isRead = !!body.output_config.format.schema.properties.regions;
+  if (isRead && /Questions on this paper/.test(user[0].text)) {
+    // Serbest kağıt: tüm sayfa tek görüntü; kapalı uçlu ve kısa cevaplar answers[], writing bölge olarak
+    const qs = [...user[0].text.matchAll(/question_id "([^"]+)" \(Q\d+, (\w+)/g)];
+    return {
+      answers: qs.filter(([, , t]) => t !== 'writing').map(([, id, t]) => ({ question_id: id, value: t === 'gap' ? 'went' : 'C', confidence: 0.93 })),
+      regions: qs.filter(([, , t]) => t === 'writing').map(([, id]) => ({ region_id: id, lines: WRITING.map((t, i) => ({ n: i + 1, words: t.split(' ').map((w, k) => ({ text: w, confidence: 0.95, box: [80 + k * 60, 520 + i * 40, 130 + k * 60, 550 + i * 40] })) })) }))
+    };
+  }
   if (isRead) {
     const regions = [];
     for (const c of user) {
@@ -344,6 +352,52 @@ test('performans: 30 kağıtlık sınıf, gecikmeli taklit API ile 10 dakikanın
   console.log(`# 30 kağıt: ${secs.toFixed(1)} sn (API çağrısı başına 1,5 sn taklit gecikme, eşzamanlı 6) · tanınan numara ${nos.size}/30`);
   assert.equal(nos.size, 30);
   assert.ok(secs < 600);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('serbest kağıt: köşe işaretçisi yok → kırp, eğikliği düzelt, üst bandı kartart, tüm sayfa okunur', async () => {
+  const { page, context, errors } = await newPage();
+  await page.goto(base);
+  await page.waitForFunction(() => window.KK);
+  const exam = await page.evaluate(async () => {
+    const ex = { id: 'serbest-1', name: 'Serbest Quiz', grade: '11', className: '9-A', cefr: 'B1', explainLang: 'tr', spelling: 'esnek', sheetMode: 'serbest', redactTop: 0.15, pagesPerStudent: 1,
+      questions: [
+        { id: 'm1', no: 1, type: 'mc', points: 20, options: 4, key: ['B'], text: 'He ___ tennis every Sunday. A) play B) plays C) playing D) played' },
+        { id: 'g1', no: 2, type: 'gap', points: 20, key: ['went'] },
+        { id: 'w1', no: 3, type: 'writing', points: 60, text: 'Write about your holiday.', minWords: 20, maxWords: 80, lines: 10, rubric: { TA: 1, CC: 1, LR: 1, GRA: 1 } }
+      ], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await window.KK.db.put('exams', ex); return ex;
+  });
+  // Öğretmenin kendi kağıdı: başlık, sorular ve el yazısı satırları; 4° eğik çekilmiş
+  const W = 1240, H = 1754, d = new Float32Array(W * H).fill(248);
+  const bar = (x, y, w, h, v = 40) => { for (let yy = y; yy < y + h; yy++) for (let xx = x; xx < x + w; xx++) d[yy * W + xx] = v; };
+  bar(100, 80, 500, 14); bar(100, 130, 300, 10); // ad / numara (karartılacak)
+  for (let i = 0; i < 26; i++) { const y = 300 + i * 48; let x = 100; const r = rng(i + 5); while (x < 1050) { const len = 30 + r() * 110; bar(Math.round(x), y, Math.round(len), 5, 60); x += len + 18; } }
+  const photo = photograph({ w: W, h: H, d }, { seed: 4, angle: 4, persp: 0.01, size: [1500, 2050], shadow: 0.2 });
+  await page.goto(base + `#/sinav/${exam.id}`);
+  const before = apiCalls.length;
+  await page.locator('input[type=file]').setInputFiles([{ name: 'serbest.png', mimeType: 'image/png', buffer: encodeGrayPNG(photo) }]);
+  await page.waitForFunction(() => [...document.querySelectorAll('tr[data-paper]')].some(r => /İncelemeye hazır/.test(r.textContent)), null, { timeout: 60000 });
+  const calls = apiCalls.slice(before);
+  assert.equal(calls.length, 2, 'bir okuma + bir değerlendirme');
+  assert.equal(calls[0].messages[0].content.filter(c => c.type === 'image').length, 1, 'tüm sayfa tek görüntü');
+  const paper = (await page.evaluate(() => window.KK.db.all('papers'))).find(p => p.examId === 'serbest-1');
+  assert.ok(paper.pages[0].detect.redactPx > 200, 'üst bant karartılmalı');
+  assert.ok(Math.abs(paper.pages[0].detect.skewDeg) >= 2, `eğiklik bulunmalı: ${paper.pages[0].detect.skewDeg}`);
+  assert.equal(paper.student.no, '');
+  // S1 yanlış (C), S2 doğru, writing 60×12/20 = 36 → 56
+  assert.equal(paper.total.grade100, 56);
+  assert.ok(paper.errors.some(e => e.questionId === 'm1' && e.quote === 'C' && e.correction === 'B'));
+  assert.ok(paper.errors.some(e => e.questionId === 'w1' && e.box && e.line === 1), 'writing hatası kağıt üzerinde konumlanmalı');
+  // Kimlik: öğretmen listeden seçer, sonra onaylar
+  await page.locator(`tr[data-paper="${paper.id}"]`).click();
+  await page.locator('.paper-inner img[src^="blob:"]').waitFor();
+  await page.getByLabel('Öğrenci', { exact: true }).selectOption('102');
+  await page.getByRole('button', { name: 'Kimliği onayla' }).click();
+  await page.getByText('Öğrenci kimliği onaylandı.').waitFor();
+  await page.getByRole('button', { name: /✓ Onayla/ }).click();
+  await page.waitForFunction(id => window.KK.db.get('papers', id).then(p => p.status === 'onaylandi'), paper.id);
   assert.deepEqual(errors, []);
   await context.close();
 });

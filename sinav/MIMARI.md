@@ -6,7 +6,7 @@ Kırmızı Kalem, İngilizce sınav kağıtlarını deneyimli bir öğretmenin t
 
 | Karar | Seçim | Gerekçe |
 |---|---|---|
-| Konum | `sinav/` klasörü, derleme adımı yok, yerel ES modülleri | Öğretmen klasörü açar ya da GitHub Pages'ten kullanır. Saf modüller Node'da doğrudan test edilir. |
+| Konum | `sinav/` klasörü, derleme adımı yok, yerel ES modülleri + Web Worker | GitHub Pages'ten (ya da `npm start` ile) açılır. Modüller `file://` üzerinden yüklenemediği için çift tıklayarak açılmaz. Saf modüller Node'da doğrudan test edilir. |
 | Depolama | IndexedDB, yalnızca öğretmenin tarayıcısında | KVKK: sunucu yok, üçüncü taraf yok. Şifreli yedek alınabilir, dönem sonunda toplu silinebilir. |
 | Kapalı uçlu sorular | **Cihazda optik okuma (OMR)** | Deterministik. Ağ gerekmez, görüntü dışarı çıkmaz. %98 uyum hedefi yapay zekâya bağlı kalmaz. |
 | El yazısı ve writing | Claude (öğretmenin kendi API anahtarıyla), iki aşamada | Aşama A görüntüyü okur ve metne çevirir. Aşama B yalnızca metni değerlendirir. Okuma ile puanlama ayrıldığı için öğretmen okumayı düzeltebilir. Aynı metin her zaman aynı sonucu alır (önbellek). |
@@ -234,10 +234,10 @@ flowchart LR
 
 | Kriter | Ölçüm |
 |---|---|
-| Kapalı uçlu sorularda ≥%98 uyum | `sinav/tests/omr.test.mjs`: sentetik taramalar (dönme, perspektif, gürültü, soluk kalem, yarım silinmiş işaret) üzerinde okunan ve gerçek cevap karşılaştırılır. Gerçek kağıtlarla saha doğrulaması öğretmen tarafından yapılmalıdır. |
+| Kapalı uçlu sorularda ≥%98 uyum | `sinav/tests/omr.test.mjs`: 30 sentetik fotoğraf (dönme, 90°/180° çevrik, perspektif, gölge, gürültü; koyu/soluk/küçük/çarpı/silinmiş/çift işaret). **Sonuç: %100 (1200/1200), %2,1'i öğretmen kontrolüne işaretlendi.** Gerçek kağıtlarla saha doğrulaması öğretmen tarafından yapılmalıdır. |
 | Writing'de ±1 bant | Kodla garanti edilemez. İstem, CEFR'e kalibre bant tanımları ve öğretmen düzenleme günlüğüyle desteklenir. Doğrulama için 3–5 gerçek kağıt gerekir (Sürüm 2'deki kalibrasyon ekranı). |
 | Her hata eksiksiz | `validate.js` her hatada konum, tür, doğru biçim ve açıklama ister. Eksik olan hata gri işaretlenir. Testte zorunlu tutulur. |
-| 30 kağıt 10 dakikanın altında | Yerel işlem kağıt başına 1 saniyenin altındadır (testte ölçülür). API çağrıları eşzamanlı 6 iş kuyruğunda yürür. Uçtan uca test taklit API ile 30 kağıdı süre sınırıyla işler. |
+| 30 kağıt 10 dakikanın altında | Yerel işlem kağıt başına ~0,12 sn. API çağrıları eşzamanlı 6 iş kuyruğunda yürür. Uçtan uca test, çağrı başına 1,5 sn taklit gecikmeyle 30 kağıdı **18 sn**'de işledi. Gerçek API ile tahmin: 4–8 dk. |
 
 ## 8. Güvenlik ve gizlilik
 

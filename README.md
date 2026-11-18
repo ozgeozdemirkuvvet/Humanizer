@@ -134,6 +134,12 @@ ARCHITECTURE.md          Tasarım kararları
 
 Katkı vermek için: [CONTRIBUTING.md](CONTRIBUTING.md) · Sürüm notları: [CHANGELOG.md](CHANGELOG.md)
 
+## Kırmızı Kalem: İngilizce sınav değerlendirme
+
+Bu depoda ikinci bir uygulama da var: [`sinav/`](sinav/README.md). **Kırmızı Kalem**, İngilizce sınav kağıtlarını okur, puanlar ve her hatayı kağıdın üzerinde numaralı işaretle gösterip nedenini açıklar. Kapalı uçlu sorular cihazda optik olarak okunur. El yazısı ve writing bölümleri Claude ile değerlendirilir. Hiçbir not öğretmen onaylamadan kesinleşmez.
+
+[Canlı uygulama](https://ozgeozdemirkuvvet.github.io/Humanizer/sinav/) · [Kullanım ve geliştirme](sinav/README.md) · [Mimari ve veri şemaları](sinav/MIMARI.md)
+
 ## Lisans
 
 [MIT](LICENSE) © 2026 Özge ÖZDEMİR KUVVET. Uygulamayı özgürce kullanabilir, değiştirebilir ve paylaşabilirsiniz; telif bildirimini korumanız yeterlidir.
