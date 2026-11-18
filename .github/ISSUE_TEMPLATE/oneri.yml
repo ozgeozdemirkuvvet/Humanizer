@@ -1,0 +1,14 @@
+name: Özellik önerisi
+description: Yeni bir fikir ya da iyileştirme
+labels: [öneri]
+body:
+  - type: textarea
+    id: sorun
+    attributes: { label: Hangi sorunu çözüyor? }
+    validations: { required: true }
+  - type: textarea
+    id: oneri
+    attributes: { label: Önerdiğiniz çözüm }
+  - type: textarea
+    id: kliseler
+    attributes: { label: "Yeni klişe önerisi (varsa)", placeholder: "ifade → doğal karşılığı" }

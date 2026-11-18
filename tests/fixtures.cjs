@@ -1,5 +1,5 @@
 // Test ve ekran görüntülerinde kullanılan örnek metinler.
-exports.AI_TEXT_TR = `Günümüzde dijital dönüşüm, eğitim alanında önemli bir rol oynamaktadır. Ayrıca öğretmenler, öğrenciler ve veliler bu süreçten doğrudan etkilenmektedir. Bu bağlamda kapsamlı bir yaklaşım benimsenmesi büyük önem taşımaktadır.​
+exports.AI_TEXT_TR = `Günümüzde dijital dönüşüm, eğitim alanında önemli bir rol oynamaktadır. Ayrıca öğretmenler, öğrenciler ve veliler bu süreçten doğrudan etkilenmektedir. Bu bağlamda kapsamlı bir yaklaşım benimsenmesi büyük önem taşımaktadır.\u200B
 
 Projemiz, öğrencilerin dijital becerilerini geliştirmeyi amaçlamaktadır. Proje kapsamında 2025 yılında 40 öğrenci atölyelere katılacaktır. Katılımcılar iş birliği, yaratıcılık ve eleştirel düşünme becerileri kazanabilir.
 

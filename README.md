@@ -1,19 +1,23 @@
 <div align="center">
 
-# ✒️ Doğal Kalem
+<img src="icon.svg" width="72" alt="">
+
+# Doğal Kalem
 
 **Yapay zekâ izlerini bulur, metni sizin sesinizle yeniden yazar.**
 
 Türkçe ve İngilizce metinleri anlamı bozmadan, gerçek bir insanın, özellikle *sizin* yazdığınız gibi okunur hâle getiren tek dosyalık web uygulaması.
 
 [![CI](https://github.com/ozgeozdemirkuvvet/humanizer/actions/workflows/ci.yml/badge.svg)](https://github.com/ozgeozdemirkuvvet/humanizer/actions/workflows/ci.yml)
-![Tek dosya](https://img.shields.io/badge/kurulum-gerekmez-2f6b4f)
-![Diller](https://img.shields.io/badge/dil-T%C3%BCrk%C3%A7e%20%7C%20English-2f6b4f)
-![Gizlilik](https://img.shields.io/badge/veri-taray%C4%B1c%C4%B1da%20kal%C4%B1r-2f6b4f)
+![Testler](https://img.shields.io/badge/testler-17%20u%C3%A7tan%20uca-2f6b4f)
+![Erişilebilirlik](https://img.shields.io/badge/WCAG%202.1-AA-2f6b4f)
+![Boyut](https://img.shields.io/badge/boyut-41%20KB%20gzip-2f6b4f)
+![Bağımlılık](https://img.shields.io/badge/derleme%20ad%C4%B1m%C4%B1-yok-2f6b4f)
+![PWA](https://img.shields.io/badge/PWA-%C3%A7evrimd%C4%B1%C5%9F%C4%B1-2f6b4f)
 
-[**Canlı demo**](https://ozgeozdemirkuvvet.github.io/humanizer/) · [Özellikler](#özellikler) · [Nasıl çalışır](#nasıl-çalışır) · [Geliştirme](#geliştirme) · [English](#english)
+[**Canlı demo**](https://ozgeozdemirkuvvet.github.io/humanizer/) · [Özellikler](#özellikler) · [Teknik öne çıkanlar](#teknik-öne-çıkanlar) · [Mimari](ARCHITECTURE.md) · [English](#english)
 
-<img src="docs/screenshots/analiz.png" alt="Analiz ekranı: genel skor, altı kategori puanı ve renkli vurgulanmış metin" width="860">
+<img src="docs/demo.gif" alt="Demo: metin yapıştırılıyor, analiz ediliyor, Claude ile yeniden yazılıyor ve değişiklikler tek tek gözden geçiriliyor" width="880">
 
 </div>
 
@@ -23,14 +27,12 @@ Türkçe ve İngilizce metinleri anlamı bozmadan, gerçek bir insanın, özelli
 
 | | |
 |---|---|
-| 🧬 **Kişisel üslup profili** | Kendi yazdığınız 3–5 metinden cümle uzunluğu ve ritmini, bağlaçlarınızı, hitap biçiminizi, resmiyet düzeyinizi, noktalama alışkanlıklarınızı, sevdiğiniz ve hiç kullanmadığınız ifadeleri çıkarır. |
-| 🔍 **Yapay zekâ izi analizi** | Altı kategoride 0–100 puan verir ve bulguları metin üzerinde renkli vurgular. Analiz tamamen çevrimdışı çalışır. |
-| ✍️ **Yeniden yazma motoru** | Claude ile, profilinize göre yazar. 5 ton (Resmî/MEB, Akademik, Erasmus+/eTwinning, Samimi e-posta, Öğrenci) ve 3 yoğunluk seçeneği vardır. Bilgi uydurmaz; eksik ayrıntı için `[buraya kendi örneğini ekle]` gibi yer tutucu bırakır. |
-| ⚖️ **Karşılaştırma ve kontrol** | Kelime düzeyinde diff gösterir. Her değişikliği tek tek kabul ya da reddedebilirsiniz. Skorun önce/sonra değişimini ve anlam kontrolünü (kaybolan sayı, alıntı, ad, kaynak) gösterir. |
-| 🧹 **Temizlik araçları** | Görünmez karakterleri ve markdown artıklarını tek tıkla temizler. `.docx` dosyalarından yazar, uygulama, rsid ve izlenen değişiklik bilgilerini siler. |
-| 📱 **Sade arayüz** | Mobil uyumludur; açık/koyu tema ve TR/EN arayüz sunar. Kopyala, `.txt` ve `.docx` indirme düğmeleri vardır; son 10 metni geçmişte tutar. |
-
-## Ekran görüntüleri
+| 🧬 **Kişisel üslup profili** | Kendi yazdığınız 3–5 metinden cümle uzunluğu ve ritmini, bağlaçlarınızı, hitap biçiminizi, resmiyet düzeyinizi, noktalama alışkanlıklarınızı, sevdiğiniz ve hiç kullanmadığınız ifadeleri ölçer. |
+| 🔍 **Yapay zekâ izi analizi** | Altı kategoride 0–100 puan verir, bulguları metin üzerinde renkli vurgular ve her vurgu için doğal bir karşılık önerir. Çevrimdışı çalışır, yazdıkça güncellenir. |
+| ✍️ **Yeniden yazma motoru** | Claude ile, ölçülen profilinize göre yazar. 5 ton (Resmî/MEB, Akademik, Erasmus+/eTwinning, Samimi e-posta, Öğrenci) ve 3 yoğunluk seçeneği vardır. Bilgi uydurmaz; eksik ayrıntı için `[buraya kendi örneğini ekle]` gibi yer tutucu bırakır. |
+| ⚖️ **Karşılaştırma ve kontrol** | Kelime düzeyinde diff gösterir. Her değişikliği tek tek kabul ya da reddedebilirsiniz. Skorun önce/sonra değişimini ve iki katmanlı anlam kontrolünü (kaybolan ya da uydurulan sayı, alıntı, ad, kaynak) gösterir. |
+| 🧹 **Temizlik araçları** | Görünmez karakterleri ve markdown artıklarını tek tıkla temizler. `.docx` dosyalarından yazar, şirket, uygulama, rsid, yorum yazarı ve izlenen değişiklik geçmişini siler. |
+| 📱 **Her yerde çalışır** | Mobil uyumludur; açık/koyu tema ve TR/EN arayüz sunar. Uygulama olarak yüklenebilir ve çevrimdışı çalışır. Klavye kısayolları vardır; son 10 metni geçmişte tutar. |
 
 <table>
   <tr>
@@ -45,12 +47,35 @@ Türkçe ve İngilizce metinleri anlamı bozmadan, gerçek bir insanın, özelli
 
 ## Hızlı başlangıç
 
-**Kurulum gerekmez.** [Canlı demoyu](https://ozgeozdemirkuvvet.github.io/humanizer/) açın ya da `index.html` dosyasını indirip tarayıcıda çift tıklayın.
+**Kurulum gerekmez.** [Canlı demoyu](https://ozgeozdemirkuvvet.github.io/humanizer/) açıp **Örnek metinle dene** düğmesine basın ya da `index.html` dosyasını indirip tarayıcıda çift tıklayın.
 
 1. **Üslup profili** sekmesine kendi yazdığınız 3–5 metni yapıştırıp *Profili çıkar ve kaydet* düğmesine basın.
-2. **Analiz** sekmesine metni yapıştırıp *Analiz et* düğmesine basın.
-3. **Ayarlar**'a [Anthropic API anahtarınızı](https://console.anthropic.com/) girin, ardından **Yeniden yaz** sekmesinde ton ve yoğunluğu seçin.
+2. **Analiz** sekmesine metni yapıştırıp <kbd>Ctrl</kbd>+<kbd>Enter</kbd>'a basın.
+3. **Ayarlar**'a [Anthropic API anahtarınızı](https://console.anthropic.com/) girin, ton ve yoğunluğu seçip <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd>'a basın.
 4. **Karşılaştır** sekmesinde değişiklikleri gözden geçirin, sonra kopyalayın ya da `.docx` olarak indirin.
+
+| Kısayol | İşlev |
+|---|---|
+| <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Enter</kbd> | Analiz et |
+| <kbd>Ctrl</kbd>/<kbd>⌘</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd> | Yeniden yaz |
+| <kbd>Esc</kbd> | Yeniden yazmayı durdur |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>Home</kbd> <kbd>End</kbd> | Sekmeler arasında gezin |
+
+## Teknik öne çıkanlar
+
+- **Sıfır derleme, tek dosya:** Yaklaşık 1650 satır, gzip ile 41 KB. Framework yok. İki kütüphane (Anthropic SDK, JSZip) sabit sürümle ve yalnızca gerektiği anda yükleniyor.
+- **Türkçe'yi gerçekten anlayan eşleştirme:** `İ/ı` büyük/küçük harf sorununu (`AYRICA` → `ayrica` hatası) karakter sınıflarıyla çözüyor ve çekim eklerini (`kapsamlı~` → *kapsamlıdır*) yakalıyor. Unicode farkındalıklı kelime sınırları kullanıyor.
+- **Açıklanabilir, deterministik analiz:** Her bulgu konumlu bir aralık ve bir öneriyle geliyor. 20.000 kelime yaklaşık 110 ms'de analiz ediliyor, tarama çizgisi algoritmasıyla 0,26 saniyede çiziliyor.
+- **Ölçülen üslup, ölçülebilir hedef:** Profil modele "samimi yaz" gibi sıfatlarla değil, sayılarla aktarılıyor: cümle uzunluğu ortalaması ve değişim katsayısı, 100 kelimedeki noktalama sıklığı, bağlaç dağılımı.
+- **Anlamı korumanın üç katmanı:** İstem kuralları, yerel olgu karşılaştırması (sayı, alıntı, URL, kaynak, özel ad; Türkçe ekler ayrıştırılarak) ve isteğe bağlı model denetimi.
+- **Sağlam API entegrasyonu:** Resmî SDK ile akış (streaming), iptal, sunucu tarafı yedek model, `refusal` ve `max_tokens` durumlarının ele alınması, her HTTP hata sınıfı için anlaşılır mesaj.
+- **Kalite güvencesi:**
+  - Gerçek Chromium'da 17 uçtan uca test; API ve CDN taklit edildiği için ağ gerekmiyor.
+  - Açık ve koyu temada, tüm ekranlarda axe-core ile **sıfır WCAG 2.1 AA ihlali**.
+  - Performans eşikleri test kapsamında; ESLint ve CI her push'ta çalışıyor.
+- **Gizlilik tasarımdan:** Sunucu yok. `.docx` işlemleri tarayıcıda yapılıyor. Service worker API trafiğine asla dokunmuyor.
+
+Ayrıntılar ve tasarım kararları için: [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## Nasıl çalışır
 
@@ -58,7 +83,7 @@ Türkçe ve İngilizce metinleri anlamı bozmadan, gerçek bir insanın, özelli
 flowchart LR
     A[Örnek metinleriniz] -->|extractProfile| P[(Üslup profili)]
     T[Yapay zekâ metni] -->|analyze| S[6 kategori skoru<br/>+ vurgular]
-    T --> R{{Claude API<br/>yeniden yazma}}
+    T --> R{{Claude<br/>yeniden yazma}}
     P --> R
     S --> R
     R --> D[Diff + kabul/ret]
@@ -66,89 +91,59 @@ flowchart LR
     C --> O[Kopyala · .txt · .docx]
 ```
 
-### Analiz kategorileri
-
 | Kategori | Neye bakar | Ağırlık |
 |---|---|---|
-| Klişe kelime ve ifadeler | *Ayrıca, Sonuç olarak, önemli bir rol oynamaktadır, günümüzde, bu bağlamda…* / *delve, tapestry, crucial, pivotal, furthermore, seamless, robust…* (TR'de ekli biçimler ve İ/ı ayrımı dâhil) | %25 |
+| Klişe kelime ve ifadeler | *Ayrıca, Sonuç olarak, önemli bir rol oynamaktadır, günümüzde, bu bağlamda…* / *delve, tapestry, crucial, pivotal, furthermore, seamless, robust…* | %25 |
 | Tekdüze cümle uzunluğu | Cümle uzunluklarının değişim katsayısı (düşük "burstiness"), eşit uzunlukta paragraflar, aynı kelimeyle başlayan cümleler | %20 |
 | Üçlü liste ve simetri | "X, Y ve Z" kalıpları, *hem… hem de*, *not only… but also* | %15 |
 | Biçim artıkları | Uzun tire (—), `**kalın**`, `#` başlık, madde işaretleri, kod biçimi | %10 |
-| Boş ve temkinli dil | *olabilir, genellikle, might, typically*; genel sonuç paragrafı; somut ayrıntı (sayı, özel ad) eksikliği | %20 |
+| Boş ve temkinli dil | *olabilir, genellikle, might, typically*; genel sonuç paragrafı; somut ayrıntı eksikliği | %20 |
 | Görünmez karakterler | U+200B/C/D, U+FEFF, U+2060, yumuşak tire, bölünemez boşluk, karışık tırnak ve kesme işaretleri | %10 |
-
-Genel skor, ağırlıklı ortalamanın %80'i ile en yüksek kategori puanının %20'sinin toplamıdır. Tek bir güçlü iz de skoru yukarı çeker.
 
 > [!NOTE]
 > Puanlar sezgiseldir (heuristik). Bu bir "yapay zekâ dedektörü" sonucu değil, metni daha doğal kılmak için yol gösteren bir kontrol listesidir.
 
-### Yeniden yazma kuralları
-
-Model şu kurallarla çalışır:
-
-- Olgular, rakamlar, kaynaklar ve alıntılar aynen korunur.
-- Cümle uzunlukları belirgin biçimde çeşitlenir; klişeler doğal karşılıklarıyla değiştirilir.
-- Simetrik yapı kırılır; markdown ve uzun tire kullanılmaz.
-- Asla bilgi uydurulmaz.
-
-Kayıtlı profiliniz ve örnek metinlerinizden kısa alıntılar istemde "ses örneği" olarak kullanılır. Varsayılan model **Claude Opus 5.5**'tir; Ayarlar'dan Sonnet 5.5 ya da Haiku 5.5 seçilebilir.
-
 ## Gizlilik
 
-- Profil, örnek metinler, geçmiş ve API anahtarı yalnızca tarayıcınızın `localStorage` alanında tutulur. Sunucu yoktur.
+- Profil, örnek metinler, geçmiş ve API anahtarı yalnızca tarayıcınızın `localStorage` alanında tutulur.
 - Metin yalnızca **Yeniden yaz** ya da **Yapay zekâ ile derin anlam kontrolü** düğmesine basıldığında doğrudan `api.anthropic.com` adresine gönderilir.
-- Analiz, temizlik ve `.docx` işlemleri tamamen tarayıcıda yapılır.
 
 > [!WARNING]
-> API anahtarı tarayıcıda saklandığı için uygulamayı ortak bilgisayarlarda kullanmayın.
+> API anahtarı tarayıcıda saklandığı için uygulamayı ortak bilgisayarlarda kullanmayın. Ayrıntılar: [SECURITY.md](SECURITY.md)
 
 ## Geliştirme
 
 ```bash
 npm install
 npx playwright install chromium   # ilk seferde
-npm test                          # Chromium'da uçtan uca testler
+npm run check                     # ESLint + 17 uçtan uca test (erişilebilirlik dâhil)
 npm start                         # http://localhost:8080
 ```
 
-Testler (`tests/app.test.cjs`) gerçek bir tarayıcıda çalışır. Anthropic API'si ve CDN yerelde taklit edildiği için ağ erişimi ya da API anahtarı gerekmez. Kapsanan konular:
-
-- Analiz doğruluğu (yapay zekâ ve insan metni ayrımı, TR/EN klişeler, İ/ı ayrımı)
-- Profil çıkarımı ve temizlik
-- Diff
-- API isteğinin biçimi
-- Kabul/ret ve anlam kontrolü
-- `.docx` meta veri silme
-- Dil değişimi ve konsol hataları
-
-### Proje yapısı
-
 ```
-index.html                 # Uygulamanın tamamı (HTML + CSS + JS, açıklamalı)
+index.html               Uygulamanın tamamı (HTML + CSS + JS, bölüm bölüm açıklamalı)
+sw.js · manifest.webmanifest · icon.svg   PWA
 tests/
-  app.test.cjs             # Uçtan uca testler (node:test + Playwright)
-  helpers.cjs              # Tarayıcı, CDN ve API taklitleri
-  fixtures.cjs             # Örnek metinler
-docs/screenshots/          # README görselleri
-.github/workflows/
-  ci.yml                   # Her push/PR'da testler
-  pages.yml                # main'e push'ta GitHub Pages yayını
+  app.test.cjs           İşlev testleri: analiz, profil, diff, API, .docx
+  quality.test.cjs       Erişilebilirlik (axe), performans, klavye, PWA
+  helpers.cjs            Tarayıcı, CDN ve SSE API taklitleri
+ARCHITECTURE.md          Tasarım kararları
+.github/                 CI, GitHub Pages, Dependabot, issue/PR şablonları
 ```
 
-`index.html` içindeki bölümler sırasıyla şunlardır: **0** yardımcılar · **1** üslup profili · **2** analiz · **3** yeniden yazma motoru · **4** karşılaştırma · **5** temizlik · **6** arayüz.
-
-Dış bağımlılıklar yalnızca gerektiğinde, sabit sürümle yüklenir: [JSZip 3.10.1](https://stuk.github.io/jszip/) ve [`@anthropic-ai/sdk` 1.3.0](https://github.com/anthropics/anthropic-sdk-typescript).
+Katkı vermek için: [CONTRIBUTING.md](CONTRIBUTING.md) · Sürüm notları: [CHANGELOG.md](CHANGELOG.md)
 
 ---
 
 ## English
 
-**Doğal Kalem** ("Natural Pen") is a single-file web app that detects AI-writing fingerprints in Turkish and English text and rewrites it, without changing its meaning, so it reads like *you* wrote it.
+**Doğal Kalem** ("Natural Pen") is a zero-build, single-file web app that detects AI-writing fingerprints in Turkish and English text and rewrites it, without changing its meaning, so it reads like *you* wrote it.
 
-- **Style profile:** built from 3–5 of your own texts (sentence rhythm, connectors, formality, punctuation, favourite and never-used phrases).
-- **AI-fingerprint analysis:** six scored categories with inline highlights, fully offline.
-- **Rewrite with Claude:** uses your profile, 5 tones and 3 intensities; never invents facts and leaves placeholders instead.
-- **Diff review:** accept or reject each change, see before/after scores, and get a meaning check for lost numbers, quotes, names and sources.
-- **Clean-up:** invisible characters and markdown leftovers; `.docx` metadata (author, app, rsid, tracked changes).
+- **Measured style profile:** built from 3–5 of your own texts (sentence-length mean and variation, connectors, formality, punctuation rates, favourite and never-used phrases).
+- **Explainable analysis:** six scored categories with positioned highlights, fully offline. Turkish-aware matching handles dotted/dotless i and suffixes.
+- **Rewrite with Claude:** official SDK, streaming, server-side fallback, 5 tones × 3 intensities. Never invents facts; leaves placeholders instead.
+- **Review:** word-level diff with per-change accept/reject, before/after scores and a three-layer meaning check.
+- **Clean-up:** invisible characters, markdown leftovers, `.docx` metadata and tracked-change history.
+- **Quality:** 17 end-to-end tests in Chromium, zero WCAG 2.1 AA violations (axe-core), lint and CI, installable PWA.
 
-Open `index.html` in a browser, or use the [live demo](https://ozgeozdemirkuvvet.github.io/humanizer/). The UI switches between Turkish and English with one click.
+Try the [live demo](https://ozgeozdemirkuvvet.github.io/humanizer/). The UI switches between Turkish and English with one click.
