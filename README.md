@@ -8,7 +8,7 @@
 
 Türkçe ve İngilizce metinleri anlamı bozmadan, gerçek bir insanın, özellikle *sizin* yazdığınız gibi okunur hâle getiren tek dosyalık web uygulaması.
 
-[![CI](https://github.com/ozgeozdemirkuvvet/humanizer/actions/workflows/ci.yml/badge.svg)](https://github.com/ozgeozdemirkuvvet/humanizer/actions/workflows/ci.yml)
+[![CI](https://github.com/ozgeozdemirkuvvet/Humanizer/actions/workflows/ci.yml/badge.svg)](https://github.com/ozgeozdemirkuvvet/Humanizer/actions/workflows/ci.yml)
 ![Testler](https://img.shields.io/badge/testler-17%20u%C3%A7tan%20uca-2f6b4f)
 ![Erişilebilirlik](https://img.shields.io/badge/WCAG%202.1-AA-2f6b4f)
 ![Boyut](https://img.shields.io/badge/boyut-41%20KB%20gzip-2f6b4f)
@@ -16,7 +16,7 @@ Türkçe ve İngilizce metinleri anlamı bozmadan, gerçek bir insanın, özelli
 ![PWA](https://img.shields.io/badge/PWA-%C3%A7evrimd%C4%B1%C5%9F%C4%B1-2f6b4f)
 [![Lisans: MIT](https://img.shields.io/badge/lisans-MIT-2f6b4f)](LICENSE)
 
-[**Canlı demo**](https://ozgeozdemirkuvvet.github.io/humanizer/) · [Özellikler](#özellikler) · [Teknik öne çıkanlar](#teknik-öne-çıkanlar) · [Mimari](ARCHITECTURE.md) · [English](#english)
+[**Canlı demo**](https://ozgeozdemirkuvvet.github.io/Humanizer/) · [Özellikler](#özellikler) · [Teknik öne çıkanlar](#teknik-öne-çıkanlar) · [Mimari](ARCHITECTURE.md) · [English](#english)
 
 <img src="docs/demo.gif" alt="Demo: metin yapıştırılıyor, analiz ediliyor, Claude ile yeniden yazılıyor ve değişiklikler tek tek gözden geçiriliyor" width="880">
 
@@ -48,7 +48,7 @@ Türkçe ve İngilizce metinleri anlamı bozmadan, gerçek bir insanın, özelli
 
 ## Hızlı başlangıç
 
-**Kurulum gerekmez.** [Canlı demoyu](https://ozgeozdemirkuvvet.github.io/humanizer/) açıp **Örnek metinle dene** düğmesine basın ya da `index.html` dosyasını indirip tarayıcıda çift tıklayın.
+**Kurulum gerekmez.** [Canlı demoyu](https://ozgeozdemirkuvvet.github.io/Humanizer/) açıp **Örnek metinle dene** düğmesine basın ya da `index.html` dosyasını indirip tarayıcıda çift tıklayın.
 
 1. **Üslup profili** sekmesine kendi yazdığınız 3–5 metni yapıştırıp *Profili çıkar ve kaydet* düğmesine basın.
 2. **Analiz** sekmesine metni yapıştırıp <kbd>Ctrl</kbd>+<kbd>Enter</kbd>'a basın.
@@ -151,6 +151,6 @@ Katkı vermek için: [CONTRIBUTING.md](CONTRIBUTING.md) · Sürüm notları: [CH
 - **Clean-up:** invisible characters, markdown leftovers, `.docx` metadata and tracked-change history.
 - **Quality:** 17 end-to-end tests in Chromium, zero WCAG 2.1 AA violations (axe-core), lint and CI, installable PWA.
 
-Try the [live demo](https://ozgeozdemirkuvvet.github.io/humanizer/). The UI switches between Turkish and English with one click.
+Try the [live demo](https://ozgeozdemirkuvvet.github.io/Humanizer/). The UI switches between Turkish and English with one click.
 
 Licensed under the [MIT License](LICENSE) © 2026 Özge ÖZDEMİR KUVVET.
