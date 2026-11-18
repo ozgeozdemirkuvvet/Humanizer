@@ -1,0 +1,17 @@
+name: Hata bildirimi
+description: Beklendiği gibi çalışmayan bir şey
+labels: [hata]
+body:
+  - type: textarea
+    id: ne
+    attributes: { label: Ne oldu?, description: "Ne bekliyordunuz, ne oldu?" }
+    validations: { required: true }
+  - type: textarea
+    id: adimlar
+    attributes: { label: Tekrar üretme adımları, placeholder: "1. Analiz sekmesine şu metni yapıştırdım…" }
+    validations: { required: true }
+  - type: input
+    id: tarayici
+    attributes: { label: Tarayıcı ve cihaz, placeholder: "Chrome 142, Windows 11" }
+  - type: markdown
+    attributes: { value: "⚠️ Lütfen API anahtarınızı ya da kişisel metinlerinizi paylaşmayın." }

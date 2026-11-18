@@ -11,6 +11,8 @@
 <meta property="og:description" content="Yapay zekâ izlerini bulur, metni sizin sesinizle yeniden yazar. Türkçe ve İngilizce.">
 <meta property="og:image" content="https://ozgeozdemirkuvvet.github.io/humanizer/docs/screenshots/social.png">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f6b4f'/%3E%3Cpath d='M20 46 L40 16 L48 22 L28 50 Z' fill='%23fff'/%3E%3Cpath d='M20 46 L18 54 L26 49 Z' fill='%23f6d77a'/%3E%3C/svg%3E">
 <!--
 ================================================================================
@@ -125,7 +127,7 @@ label.fld{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 4px}
 .hl .c-invis{background:var(--c-invis);border-radius:3px;outline:1px dashed var(--danger)}
 .hl .c-burst{text-decoration:underline wavy var(--c-burst);text-decoration-thickness:1px;text-underline-offset:4px}
 .hl [title]{cursor:help}
-.invis-glyph{font-size:.7em;color:var(--danger);font-weight:700}
+.invis-glyph{font-size:.7em;color:var(--text);font-weight:700}
 
 /* ---------- Diff ---------- */
 .diffcol{white-space:pre-wrap;word-wrap:break-word;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;line-height:1.7;max-height:560px;overflow:auto}
@@ -162,6 +164,13 @@ label.fld{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 4px}
 .history li .t small{color:var(--muted)}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;max-width:calc(100% - 32px)}
 .toast.show{opacity:1}
+/* Klavye kullanıcıları için görünür odak; fareyle tıklamada gizli */
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.bar i{transition:width .5s cubic-bezier(.2,.7,.2,1)}
+kbd{font:600 .75rem ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--border);border-bottom-width:2px;border-radius:4px;padding:1px 5px;background:var(--surface-2);color:var(--muted)}
+.kbd-hint{color:var(--muted);font-size:.8rem}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 .stream{white-space:pre-wrap;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;min-height:120px;max-height:460px;overflow:auto}
 .muted{color:var(--muted)}
 .spacer{flex:1}
@@ -183,33 +192,36 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   </header>
 
   <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="analyze" aria-selected="true" data-i18n="tabAnalyze">1 · Analiz</button>
-    <button role="tab" data-tab="rewrite" data-i18n="tabRewrite">2 · Yeniden yaz</button>
-    <button role="tab" data-tab="compare" data-i18n="tabCompare">3 · Karşılaştır</button>
-    <button role="tab" data-tab="profile" data-i18n="tabProfile">Üslup profili</button>
-    <button role="tab" data-tab="clean" data-i18n="tabClean">Temizlik</button>
-    <button role="tab" data-tab="history" data-i18n="tabHistory">Geçmiş</button>
+    <button role="tab" id="tab-analyze" aria-controls="p-analyze" data-tab="analyze" aria-selected="true" data-i18n="tabAnalyze">1 · Analiz</button>
+    <button role="tab" id="tab-rewrite" aria-controls="p-rewrite" data-tab="rewrite" data-i18n="tabRewrite">2 · Yeniden yaz</button>
+    <button role="tab" id="tab-compare" aria-controls="p-compare" data-tab="compare" data-i18n="tabCompare">3 · Karşılaştır</button>
+    <button role="tab" id="tab-profile" aria-controls="p-profile" data-tab="profile" data-i18n="tabProfile">Üslup profili</button>
+    <button role="tab" id="tab-clean" aria-controls="p-clean" data-tab="clean" data-i18n="tabClean">Temizlik</button>
+    <button role="tab" id="tab-history" aria-controls="p-history" data-tab="history" data-i18n="tabHistory">Geçmiş</button>
   </nav>
 
   <!-- ===================== ANALİZ ===================== -->
-  <section class="panel active" id="p-analyze">
+  <section class="panel active" id="p-analyze" role="tabpanel" aria-labelledby="tab-analyze">
     <div class="card">
       <h2 data-i18n="inputTitle">Metin</h2>
       <p class="hint" data-i18n="inputHint">Yapay zekâyla üretilmiş ya da desteklenmiş metni yapıştırın. Analiz tamamen tarayıcınızda yapılır.</p>
+      <label for="inputText" class="sr-only">Metin / Text</label>
       <textarea id="inputText" spellcheck="false"></textarea>
       <div class="row" style="margin-top:10px">
         <button class="btn primary" id="btnAnalyze" data-i18n="analyze">Analiz et</button>
         <button class="btn" id="btnQuickClean" data-i18n="quickClean">Görünmez karakterleri temizle</button>
+        <button class="btn" id="btnDemo" data-i18n="demo">Örnek metinle dene</button>
         <label class="btn" style="display:inline-block"><span data-i18n="loadDocx">.docx'ten yükle</span><input type="file" id="docxToInput" accept=".docx" hidden></label>
         <span class="spacer"></span>
-        <span class="muted" id="langBadge"></span>
+        <span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>Enter</kbd></span>
+        <span class="muted" id="langBadge" aria-live="polite"></span>
       </div>
     </div>
     <div id="analysisOut"></div>
   </section>
 
   <!-- ===================== YENİDEN YAZ ===================== -->
-  <section class="panel" id="p-rewrite">
+  <section class="panel" id="p-rewrite" role="tabpanel" aria-labelledby="tab-rewrite">
     <div class="card">
       <h2 data-i18n="rwTitle">Yeniden yazma ayarları</h2>
       <p class="hint" id="rwProfileNote"></p>
@@ -238,17 +250,18 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
       <div class="row" style="margin-top:14px">
         <button class="btn primary" id="btnRewrite" data-i18n="rewrite">Yeniden yaz</button>
         <button class="btn" id="btnStop" hidden data-i18n="stop">Durdur</button>
-        <span class="muted" id="rwStatus"></span>
+        <span class="muted" id="rwStatus" role="status" aria-live="polite"></span>
+        <span class="kbd-hint"><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Enter</kbd></span>
       </div>
     </div>
     <div class="card">
       <h2 data-i18n="rwOutput">Çıktı</h2>
-      <div class="stream" id="rwStream"></div>
+      <div class="stream" id="rwStream" tabindex="0"></div>
     </div>
   </section>
 
   <!-- ===================== KARŞILAŞTIR ===================== -->
-  <section class="panel" id="p-compare">
+  <section class="panel" id="p-compare" role="tabpanel" aria-labelledby="tab-compare">
     <div id="compareEmpty" class="card"><p class="muted" data-i18n="cmpEmpty">Önce bir metni yeniden yazın.</p></div>
     <div id="compareOut" hidden>
       <div class="card">
@@ -290,7 +303,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   </section>
 
   <!-- ===================== PROFİL ===================== -->
-  <section class="panel" id="p-profile">
+  <section class="panel" id="p-profile" role="tabpanel" aria-labelledby="tab-profile">
     <div class="card">
       <h2 data-i18n="profTitle">Kişisel üslup profili</h2>
       <p class="hint" data-i18n="profHint">Kendi yazdığınız 3–5 metni (e-posta, makale, proje metni) yapıştırın. Ne kadar çeşitli olursa profil o kadar isabetli olur.</p>
@@ -305,7 +318,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   </section>
 
   <!-- ===================== TEMİZLİK ===================== -->
-  <section class="panel" id="p-clean">
+  <section class="panel" id="p-clean" role="tabpanel" aria-labelledby="tab-clean">
     <div class="card">
       <h2 data-i18n="cleanTitle">Metin temizliği</h2>
       <p class="hint" data-i18n="cleanHint">Analiz alanındaki metne uygulanır.</p>
@@ -333,7 +346,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   </section>
 
   <!-- ===================== GEÇMİŞ ===================== -->
-  <section class="panel" id="p-history">
+  <section class="panel" id="p-history" role="tabpanel" aria-labelledby="tab-history">
     <div class="card">
       <div class="row"><h2 style="margin:0" data-i18n="histTitle">Son 10 metin</h2><span class="spacer"></span><button class="btn small" id="btnClearHist" data-i18n="clearHist">Geçmişi temizle</button></div>
       <ul class="history" id="historyList"></ul>
@@ -361,7 +374,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
   </div>
 </dialog>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script type="module">
 /* ============================================================================
@@ -372,7 +385,7 @@ dialog::backdrop{background:rgba(0,0,0,.4)}
 const store = {
   get(k, def = null) { try { const v = localStorage.getItem('dk.' + k); return v == null ? def : JSON.parse(v); } catch { return def; } },
   set(k, v) { try { localStorage.setItem('dk.' + k, JSON.stringify(v)); return true; } catch { return false; } },
-  del(k) { try { localStorage.removeItem('dk.' + k); } catch {} }
+  del(k) { try { localStorage.removeItem('dk.' + k); } catch { /* depolama yoksa sessizce geç */ } }
 };
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
@@ -388,7 +401,7 @@ function toast(msg) {
 }
 
 /** Kelimeler: Unicode harf/rakam dizileri (Türkçe karakterler dâhil). */
-const wordsOf = text => text.match(/[\p{L}\p{N}][\p{L}\p{N}'’\-]*/gu) || [];
+const wordsOf = text => text.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || [];
 
 /** Basit dil algılama: Türkçe'ye özgü harfler + sık kelimeler. */
 function detectLang(text) {
@@ -450,7 +463,7 @@ function phraseRe(p) {
 const I18N = {
   tr: {},  // Türkçe metinler HTML'de zaten yazılı; ilk yüklemede buraya kopyalanır.
   en: {
-    tagline: 'Finds AI fingerprints and rewrites text in your own voice.', settings: 'Settings',
+    demo: 'Try a sample text', tagline: 'Finds AI fingerprints and rewrites text in your own voice.', settings: 'Settings',
     tabAnalyze: '1 · Analyze', tabRewrite: '2 · Rewrite', tabCompare: '3 · Compare', tabProfile: 'Style profile', tabClean: 'Clean-up', tabHistory: 'History',
     inputTitle: 'Text', inputHint: 'Paste AI-generated or AI-assisted text. Analysis runs entirely in your browser.',
     analyze: 'Analyze', quickClean: 'Remove invisible characters', loadDocx: 'Load from .docx',
@@ -736,6 +749,8 @@ const HEDGES = {
 const CONCLUSION_OPENERS = ['Sonuç olarak', 'Özetle', 'Kısacası', 'Sonuçta', 'Nihayetinde', 'Genel olarak', 'Tüm bunlar', 'Bütün bunlar',
   'In conclusion', 'Overall', 'In summary', 'To sum up', 'Ultimately', 'All in all', 'In short'];
 const INVIS = { '\u200B': 'ZWSP', '\u200C': 'ZWNJ', '\u200D': 'ZWJ', '\uFEFF': 'BOM', '\u2060': 'WJ', '\u00AD': 'SHY', '\u00A0': 'NBSP', '\u202F': 'NNBSP', '\u2007': 'FIGSP', '\u180E': 'MVS' };
+// Sıfır genişlikli karakterler (ZWJ karakter sınıfında birleşik dizi gibi davranabildiği için alternasyonla yazılır)
+const INVIS_HARD = /\u200B|\u200C|\u200D|\uFEFF|\u2060|\u00AD|\u180E/g;
 const CATS = [
   { id: 'cliche', color: 'var(--c-cliche)', w: .25 }, { id: 'burst', color: 'var(--c-burst)', w: .20 }, { id: 'triad', color: 'var(--c-triad)', w: .15 },
   { id: 'format', color: 'var(--c-format)', w: .10 }, { id: 'hedge', color: 'var(--c-hedge)', w: .20 }, { id: 'invis', color: 'var(--c-invis)', w: .10 }
@@ -835,7 +850,7 @@ function analyze(text, langHint) {
   let proper = 0;
   for (const s of sents) { const w = wordsOf(s.text); for (let i = 1; i < w.length; i++) if (/^\p{Lu}/u.test(w[i])) proper++; }
   const concrete = per100(nums + proper);
-  let hs = per100(hd) * 16 + (genericEnd ? 30 : 0) + (concrete < 1 ? 30 : concrete < 2.5 ? 15 : 0);
+  const hs = per100(hd) * 16 + (genericEnd ? 30 : 0) + (concrete < 1 ? 30 : concrete < 2.5 ? 15 : 0);
   scores.hedge = { score: clamp(hs), why: `${hd} ${T ? 'hedges' : 'temkinli ifade'}${genericEnd ? (T ? ', generic conclusion' : ', genel sonuç paragrafı') : ''}; ${T ? 'concreteness' : 'somutluk'} ${round(concrete)}/100 ${D('words')}` };
 
   // --- (f) Görünmez karakterler ve tutarsız tırnaklar ---
@@ -867,11 +882,16 @@ function renderHighlighted(text, spans) {
   const pts = new Set([0, text.length]);
   spans.forEach(s => { pts.add(s.start); pts.add(s.end); });
   const b = [...pts].sort((x, y) => x - y);
-  let html = '';
+  // Tarama çizgisi (sweep line): aralıklar başlangıca göre sıralanır, etkin küme
+  // artımlı güncellenir. Böylece büyük metinlerde O(parça × aralık) maliyetinden kaçınılır.
+  const byStart = [...spans].sort((x, y) => x.start - y.start);
+  let html = '', next = 0, active = [];
   for (let i = 0; i < b.length - 1; i++) {
     const a = b[i], z = b[i + 1]; if (a === z) continue;
-    const act = spans.filter(s => s.start <= a && s.end >= z);
-    let seg = esc(text.slice(a, z)).replace(/[\u200B\u200C\u200D\uFEFF\u2060\u00AD\u180E]/g, ch => `<span class="invis-glyph">⟦${INVIS[ch]}⟧</span>`)
+    while (next < byStart.length && byStart[next].start <= a) active.push(byStart[next++]);
+    active = active.filter(s => s.end > a);
+    const act = active;
+    const seg = esc(text.slice(a, z)).replace(INVIS_HARD, ch => `<span class="invis-glyph">⟦${INVIS[ch]}⟧</span>`)
       .replace(/[\u00A0\u202F\u2007]/g, '<span class="invis-glyph">⍽</span>');
     if (act.length) {
       const cls = [...new Set(act.map(s => 'c-' + s.cat))].join(' ');
@@ -920,7 +940,7 @@ function cleanText(text, o) {
   let n = 0;
   // Geri çağırma kullanıldığı için "$1" gibi grup başvuruları elle açılır
   const rep = (re, to) => { text = text.replace(re, (...a) => { n++; return typeof to === 'function' ? to(...a) : to.replace(/\$(\d)/g, (_, d) => a[+d] ?? ''); }); };
-  if (o.invis) rep(/[\u200B\u200C\u200D\uFEFF\u2060\u00AD\u180E]/g, '');
+  if (o.invis) rep(INVIS_HARD, '');
   if (o.nbsp) rep(/[\u00A0\u202F\u2007]/g, ' ');
   if (o.md) {
     rep(/\*\*([^*\n]+)\*\*/g, '$1'); rep(/__([^_\n]+)__/g, '$1');
@@ -933,7 +953,7 @@ function cleanText(text, o) {
     // Baskın stile göre: kıvrık tırnak daha çoksa hepsi kıvrık, değilse düz
     const curly = (text.match(/[“”]/g) || []).length, straight = (text.match(/"/g) || []).length;
     if (curly && straight) {
-      if (curly >= straight) { let open = true; rep(/"/g, () => (open = !open) ? '”' : '“'); }
+      if (curly >= straight) { let open = true; rep(/"/g, () => { open = !open; return open ? '”' : '“'; }); }
       else rep(/[“”„]/g, '"');
     }
     const ca = (text.match(/(?<=\p{L})’(?=\p{L})/gu) || []).length, sa = (text.match(/(?<=\p{L})'(?=\p{L})/gu) || []).length;
@@ -1016,7 +1036,7 @@ async function cleanDocx(file, opt) {
   if (ct) { ct = ct.replace(/<Override\b[^>]*\/>/g, o => dropParts.some(p => o.includes(`PartName="/${p}"`)) ? '' : o); zip.file('[Content_Types].xml', ct); }
 
   // word/*.xml içindeki revizyon kimlikleri, yazarlar, tarihler, izlenen değişiklikler
-  let rsid = 0, authors = new Set(), ins = 0, del = 0, chg = 0;
+  const authors = new Set(); let rsid = 0, ins = 0, del = 0, chg = 0;
   for (const path of Object.keys(zip.files).filter(p => /^word\/[^/]+\.xml$/.test(p))) {
     let x = await zip.file(path).async('string');
     x.replace(/w:author="([^"]*)"/g, (_, a) => { if (a) authors.add(xmlDecode(a)); });
@@ -1041,9 +1061,9 @@ async function cleanDocx(file, opt) {
     zip.file(path, x);
   }
   if (opt.comments) {
-    let rels = await read('word/_rels/document.xml.rels');
+    const rels = await read('word/_rels/document.xml.rels');
     if (rels) zip.file('word/_rels/document.xml.rels', rels.replace(/<Relationship\b[^>]*Target="comments[^"]*"[^>]*\/>/g, ''));
-    let ct2 = await read('[Content_Types].xml');
+    const ct2 = await read('[Content_Types].xml');
     if (ct2) zip.file('[Content_Types].xml', ct2.replace(/<Override\b[^>]*PartName="\/word\/comments[^"]*"[^>]*\/>/g, ''));
   }
   if (authors.size) found.push((UI === 'en' ? 'change/comment authors: ' : 'değişiklik/yorum yazarları: ') + [...authors].join(', '));
@@ -1390,13 +1410,21 @@ function renderMeaning() {
    6. ARAYÜZ: sekmeler, profil ekranı, geçmiş, olay bağlama
    ========================================================================== */
 function switchTab(id) {
-  $$('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === id));
+  $$('nav.tabs button').forEach(b => { const on = b.dataset.tab === id; b.setAttribute('aria-selected', on); b.tabIndex = on ? 0 : -1; });
   $$('section.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + id));
   store.set('tab', id);
   if (id === 'rewrite') updateProfileNote();
   if (id === 'history') renderHistory();
 }
 $$('nav.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+// WAI-ARIA sekme deseni: ← → Home End ile gezinme; yalnızca seçili sekme Tab sırasında
+$('nav.tabs').addEventListener('keydown', e => {
+  const tabs = $$('nav.tabs button'), i = tabs.indexOf(document.activeElement);
+  if (i < 0) return;
+  const j = { ArrowRight: (i + 1) % tabs.length, ArrowLeft: (i - 1 + tabs.length) % tabs.length, Home: 0, End: tabs.length - 1 }[e.key];
+  if (j == null) return;
+  e.preventDefault(); tabs[j].focus(); switchTab(tabs[j].dataset.tab);
+});
 
 function segValue(id) { return $(`#${id} [aria-pressed="true"]`)?.dataset.v; }
 function bindSeg(id, key) {
@@ -1418,6 +1446,29 @@ function runAnalysis() {
   return res;
 }
 $('#btnAnalyze').onclick = runAnalysis;
+
+// Örnek metinler: canlı demoyu ziyaret edenler API anahtarı olmadan analizi deneyebilsin
+const DEMO = {
+  tr: 'Günümüzde dijital dönüşüm, eğitim alanında önemli bir rol oynamaktadır. Ayrıca öğretmenler, öğrenciler ve veliler bu süreçten doğrudan etkilenmektedir. Bu bağlamda kapsamlı bir yaklaşım benimsenmesi büyük önem taşımaktadır.​\n\nProjemiz, öğrencilerin dijital becerilerini geliştirmeyi amaçlamaktadır. Proje kapsamında 2025 yılında 40 öğrenci atölyelere katılacaktır. Katılımcılar iş birliği, yaratıcılık ve eleştirel düşünme becerileri kazanabilir.\n\nSonuç olarak, bu proje genellikle olumlu sonuçlar doğurabilir ve eğitimin kalitesine katkı sağlayabilir. Öğrenciler **daha donanımlı** bireyler olarak yetişecektir — bu son derece önemlidir.',
+  en: "In today's fast-paced world, digital literacy plays a crucial role in education. Furthermore, teachers, students and parents are all affected by this transformation. It's worth noting that a comprehensive, holistic approach is essential.​\n\nOur project aims to foster students' digital skills. In 2025, 40 students will take part in the workshops. Participants may develop collaboration, creativity and critical thinking.\n\nIn conclusion, this project could potentially have a pivotal impact on education. Students will **seamlessly** navigate the digital landscape — which is truly invaluable."
+};
+$('#btnDemo').onclick = () => { $('#inputText').value = DEMO[UI]; store.set('draft', DEMO[UI]); runAnalysis(); };
+
+// Sonuç ekrandayken yazdıkça analiz yeniden çalışır (350 ms gecikmeyle)
+let liveT;
+$('#inputText').addEventListener('input', () => {
+  if (!$('#analysisOut').innerHTML) return;
+  clearTimeout(liveT);
+  liveT = setTimeout(() => { const t = $('#inputText').value; if (t.trim()) renderAnalysis(t, analyze(t)); }, 350);
+});
+
+// Klavye kısayolları: Ctrl/⌘+Enter analiz, Ctrl/⌘+Shift+Enter yeniden yaz, Esc durdur
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    if (e.shiftKey) { switchTab('rewrite'); rewrite(); } else { switchTab('analyze'); runAnalysis(); }
+  } else if (e.key === 'Escape' && ACTIVE_STREAM) ACTIVE_STREAM.abort();
+});
 $('#inputText').value = store.get('draft', '');
 $('#inputText').addEventListener('input', () => store.set('draft', $('#inputText').value));
 $('#btnQuickClean').onclick = () => {
@@ -1591,6 +1642,9 @@ $('#btnRewrite').onclick = () => rewrite();
 applyTheme(); applyI18n(); renderSamples(); renderProfile(); updateProfileNote();
 switchTab(store.get('tab', 'analyze') === 'compare' ? 'analyze' : store.get('tab', 'analyze'));
 renderCompare();
+
+// Çevrimdışı çalışma ve "uygulama olarak yükle" (yalnızca http/https üzerinden sunulduğunda)
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 // Test/hata ayıklama için konsoldan erişim
 window.DK = { analyze, extractProfile, cleanText, diff, meaningIssues, splitSentences, detectLang };

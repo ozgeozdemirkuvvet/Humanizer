@@ -1,0 +1,12 @@
+{
+  "name": "Doğal Kalem",
+  "short_name": "Doğal Kalem",
+  "description": "Yapay zekâ izlerini bulur, metni sizin sesinizle yeniden yazar.",
+  "lang": "tr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f7f6f2",
+  "theme_color": "#2f6b4f",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}
