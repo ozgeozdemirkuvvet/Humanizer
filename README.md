@@ -14,6 +14,7 @@ Türkçe ve İngilizce metinleri anlamı bozmadan, gerçek bir insanın, özelli
 ![Boyut](https://img.shields.io/badge/boyut-41%20KB%20gzip-2f6b4f)
 ![Bağımlılık](https://img.shields.io/badge/derleme%20ad%C4%B1m%C4%B1-yok-2f6b4f)
 ![PWA](https://img.shields.io/badge/PWA-%C3%A7evrimd%C4%B1%C5%9F%C4%B1-2f6b4f)
+[![Lisans: MIT](https://img.shields.io/badge/lisans-MIT-2f6b4f)](LICENSE)
 
 [**Canlı demo**](https://ozgeozdemirkuvvet.github.io/humanizer/) · [Özellikler](#özellikler) · [Teknik öne çıkanlar](#teknik-öne-çıkanlar) · [Mimari](ARCHITECTURE.md) · [English](#english)
 
@@ -133,6 +134,10 @@ ARCHITECTURE.md          Tasarım kararları
 
 Katkı vermek için: [CONTRIBUTING.md](CONTRIBUTING.md) · Sürüm notları: [CHANGELOG.md](CHANGELOG.md)
 
+## Lisans
+
+[MIT](LICENSE) © 2026 Özge ÖZDEMİR KUVVET. Uygulamayı özgürce kullanabilir, değiştirebilir ve paylaşabilirsiniz; telif bildirimini korumanız yeterlidir.
+
 ---
 
 ## English
@@ -147,3 +152,5 @@ Katkı vermek için: [CONTRIBUTING.md](CONTRIBUTING.md) · Sürüm notları: [CH
 - **Quality:** 17 end-to-end tests in Chromium, zero WCAG 2.1 AA violations (axe-core), lint and CI, installable PWA.
 
 Try the [live demo](https://ozgeozdemirkuvvet.github.io/humanizer/). The UI switches between Turkish and English with one click.
+
+Licensed under the [MIT License](LICENSE) © 2026 Özge ÖZDEMİR KUVVET.
