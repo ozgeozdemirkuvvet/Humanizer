@@ -19,5 +19,7 @@
     "globals": "^16.5.0",
     "jszip": "3.10.1",
     "playwright": "1.63.0"
-  }
+  },
+  "license": "MIT",
+  "author": "Özge ÖZDEMİR KUVVET"
 }
