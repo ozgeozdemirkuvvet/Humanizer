@@ -131,8 +131,7 @@ export function missingFields(e, rules) {
   if (!String(e.quote ?? '').trim() && e.code !== '^') miss.push('yazılan');
   if (!String(e.correction ?? e.corrected ?? '').trim()) miss.push('doğru biçim');
   if (!CODES[e.code]) miss.push('hata türü');
-  const rule = rules?.find(r => r.ruleId === e.ruleId);
-  if (!String(rule?.explanation || e.explanation || '').trim()) miss.push('açıklama');
+  if (!explanationOf(e, rules).explanation.trim()) miss.push('açıklama');
   if (!SEVERITY[e.severity]) miss.push('ciddiyet');
   return miss;
 }
@@ -143,16 +142,31 @@ export function numberErrors(errors, exam) {
   const sorted = [...errors].sort((a, b) =>
     (qOrder.get(a.questionId) ?? 999) - (qOrder.get(b.questionId) ?? 999) ||
     (a.line ?? 0) - (b.line ?? 0) ||
-    (a.span?.start ?? 0) - (b.span?.start ?? 0));
+    (a.span?.start ?? 1e9) - (b.span?.start ?? 1e9)); // konumu bulunamayan hata satır sonuna
   return sorted.map((e, i) => ({ ...e, no: i + 1, id: e.id || `e${i + 1}` }));
 }
 
-/** Aynı kuraldan gelen tekrarlar: ruleId → { count, lines, nos }. */
+/**
+ * Tekrar grubu anahtarı. Satırı olmayan (kapalı uçlu / kısa cevap) hatalar kendi sorularına özgü
+ * açıklama taşır; writing hatalarıyla aynı kuralı paylaşsalar bile ayrı tutulur.
+ */
+export function groupKey(e) {
+  if (!e.ruleId) return null;
+  return e.line == null ? `${e.ruleId}::${e.questionId}` : e.ruleId;
+}
+
+/** Hatanın açıklaması: soruya özgü açıklama varsa o, yoksa kuralın açıklaması. */
+export function explanationOf(e, rules) {
+  const rule = rules?.find(r => r.ruleId === e.ruleId);
+  return { explanation: e.explanation || rule?.explanation || '', example: e.example || rule?.example || '' };
+}
+
+/** Aynı kuraldan gelen tekrarlar: grupAnahtarı → { count, lines, nos }. */
 export function groupRecurring(errors) {
   const g = new Map();
   for (const e of errors) {
-    if (!e.ruleId) continue;
-    const k = e.ruleId;
+    const k = groupKey(e);
+    if (!k) continue;
     if (!g.has(k)) g.set(k, { ruleId: k, code: e.code, count: 0, lines: [], nos: [] });
     const x = g.get(k);
     x.count++; x.nos.push(e.no);
@@ -194,12 +208,12 @@ export function errorTable(paper, exam, lang = 'tr') {
   const groups = groupRecurring(paper.errors || []);
   const seen = new Set();
   return (paper.errors || []).map(e => {
-    const rule = paper.rules?.find(r => r.ruleId === e.ruleId);
-    let explanation = rule?.explanation || e.explanation || '';
-    const g = groups.get(e.ruleId);
-    if (e.ruleId && seen.has(e.ruleId)) explanation = lang === 'en' ? `See error ${g.nos[0]}` : `Bkz. hata ${g.nos[0]}`;
+    let { explanation } = explanationOf(e, paper.rules);
+    const k = groupKey(e);
+    const g = groups.get(k);
+    if (k && seen.has(k)) explanation = lang === 'en' ? `See error ${g.nos[0]}` : `Bkz. hata ${g.nos[0]}`;
     else if (g && g.count > 1) explanation += ` (${recurrenceText(g, lang)})`;
-    if (e.ruleId) seen.add(e.ruleId);
+    if (k) seen.add(k);
     const where = `S${qNo.get(e.questionId) ?? '?'}` + (e.line ? (lang === 'en' ? ` / Line ${e.line}` : ` / Satır ${e.line}`) : '');
     return {
       no: e.no, where,
