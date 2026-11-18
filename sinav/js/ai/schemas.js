@@ -18,19 +18,29 @@ export const READ_SCHEMA = obj({
   answers: arr(obj({ question_id: str, value: str, confidence: num }))
 });
 
+const ERROR_ITEM = obj({
+  line: int, quote: str, occurrence: int,
+  code: { type: 'string', enum: CODE_LIST },
+  rule_id: str, correction: str, original: str, corrected: str,
+  severity: { type: 'string', enum: ['bozuyor', 'bozmuyor'] },
+  criterion: { type: 'string', enum: CRITERION_LIST },
+  certain: bool, uncertain_reason: str
+});
+const SUGGESTION_ITEM = obj({ line: int, quote: str, suggestion: str, reason: str });
+
 export const EVAL_SCHEMA = obj({
+  open: arr(obj({
+    question_id: str,
+    points: arr(obj({ index: int, verdict: { type: 'string', enum: ['karsilandi', 'kismen', 'eksik'] }, justification: str })),
+    language: obj({ band: int, justification: str }),
+    errors: arr(ERROR_ITEM),
+    suggestions: arr(SUGGESTION_ITEM)
+  })),
   writing: arr(obj({
     question_id: str,
     rubric: arr(obj({ criterion: { type: 'string', enum: CRITERION_LIST }, band: int, justification: str })),
-    errors: arr(obj({
-      line: int, quote: str, occurrence: int,
-      code: { type: 'string', enum: CODE_LIST.filter(c => c !== 'Key') },
-      rule_id: str, correction: str, original: str, corrected: str,
-      severity: { type: 'string', enum: ['bozuyor', 'bozmuyor'] },
-      criterion: { type: 'string', enum: CRITERION_LIST },
-      certain: bool, uncertain_reason: str
-    })),
-    suggestions: arr(obj({ line: int, quote: str, suggestion: str, reason: str }))
+    errors: arr(ERROR_ITEM),
+    suggestions: arr(SUGGESTION_ITEM)
   })),
   rules: arr(obj({ rule_id: str, code: { type: 'string', enum: CODE_LIST }, explanation: str, example: str })),
   answer_notes: arr(obj({
@@ -62,17 +72,27 @@ export function normalizeRead(raw, knownRegionIds) {
 }
 
 /** Aşama B çıktısını iç biçime çevirir; geri bildirimde en fazla 3 gelişim alanı. */
+const normErrors = list => (list || []).map(e => ({
+  line: e.line, quote: e.quote, occurrence: Math.max(1, e.occurrence || 1), code: e.code, ruleId: e.rule_id,
+  correction: e.correction, original: e.original, corrected: e.corrected, severity: e.severity,
+  criterion: e.criterion, certain: e.certain !== false, uncertainReason: e.uncertain_reason || ''
+}));
+const normSuggestions = list => (list || []).map(s => ({ line: s.line, quote: s.quote, occurrence: 1, suggestion: s.suggestion, reason: s.reason }));
+
 export function normalizeEval(raw) {
   return {
+    open: (raw?.open || []).map(o => ({
+      questionId: o.question_id,
+      points: (o.points || []).map(p => ({ index: p.index, verdict: p.verdict, justification: String(p.justification || '').trim() })),
+      language: { band: Math.max(0, Math.min(4, Math.round(o.language?.band ?? 0))), justification: String(o.language?.justification || '').trim() },
+      errors: normErrors(o.errors),
+      suggestions: normSuggestions(o.suggestions)
+    })),
     writing: (raw?.writing || []).map(w => ({
       questionId: w.question_id,
       rubric: (w.rubric || []).map(r => ({ criterion: r.criterion, band: Math.max(0, Math.min(5, Math.round(r.band))), justification: String(r.justification || '').trim() })),
-      errors: (w.errors || []).map(e => ({
-        line: e.line, quote: e.quote, occurrence: Math.max(1, e.occurrence || 1), code: e.code, ruleId: e.rule_id,
-        correction: e.correction, original: e.original, corrected: e.corrected, severity: e.severity,
-        criterion: e.criterion, certain: e.certain !== false, uncertainReason: e.uncertain_reason || ''
-      })),
-      suggestions: (w.suggestions || []).map(s => ({ line: s.line, quote: s.quote, occurrence: 1, suggestion: s.suggestion, reason: s.reason }))
+      errors: normErrors(w.errors),
+      suggestions: normSuggestions(w.suggestions)
     })),
     rules: dedupe((raw?.rules || []).map(r => ({ ruleId: r.rule_id, code: r.code, explanation: String(r.explanation || '').trim(), example: String(r.example || '').trim() })), 'ruleId'),
     answerNotes: (raw?.answer_notes || []).map(n => ({ questionId: n.question_id, code: n.code, ruleId: n.rule_id, explanation: n.explanation, example: n.example, severity: n.severity })),

@@ -191,6 +191,11 @@ export function impactText(e, lang = 'tr') {
     if (!p) return lang === 'en' ? 'No deduction' : 'Puan kırılmadı';
     return lang === 'en' ? `−${fmt(p)} points` : `−${fmt(p)} puan`;
   }
+  if (i.kind === 'content') return lang === 'en' ? 'Lowers the content score' : 'İçerik puanını düşürüyor';
+  if (i.kind === 'language') {
+    if (!Number(i.weight)) return lang === 'en' ? 'Marked only; no deduction (language weight 0%)' : 'Yalnızca işaretlendi; puan kırmaz (dil payı %0)';
+    return lang === 'en' ? `Affects the language score (${i.weight}% of the question)` : `Dil puanını etkiliyor (sorunun %${i.weight}'i)`;
+  }
   if (i.kind === 'rubric' && CRITERIA[i.criterion]) {
     return lang === 'en' ? `Affects ${i.criterion} (${CRITERIA[i.criterion].en})` : `${i.criterion} (${CRITERIA[i.criterion].tr}) ölçütünü etkiliyor`;
   }

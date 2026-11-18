@@ -6,7 +6,7 @@ export function newExam(partial = {}) {
   const now = new Date().toISOString();
   return {
     id: partial.id || uid(),
-    name: '', grade: '9', className: '', cefr: 'A2', explainLang: 'tr',
+    name: '', grade: '9', className: '', cefr: 'A2', explainLang: 'tr', langWeight: 30,
     spelling: 'esnek', sheetMode: 'kirmizikalem', redactTop: 0.15,
     questions: [], createdAt: now, updatedAt: now,
     ...partial
@@ -14,7 +14,8 @@ export function newExam(partial = {}) {
 }
 
 export function newQuestion(type, no) {
-  const base = { id: uid().slice(0, 8), no, type, points: type === 'writing' ? 20 : 2, key: [], text: '', outcome: '' };
+  const base = { id: uid().slice(0, 8), no, type, points: type === 'writing' ? 20 : type === 'open' ? 10 : 2, key: [], text: '', outcome: '' };
+  if (type === 'open') return { ...base, modelAnswer: '', keyPoints: [], lines: 4 };
   if (type === 'mc') return { ...base, options: 4 };
   if (type === 'match') return { ...base, options: 5 };
   if (type === 'gap') return { ...base, alternatives: [] };
@@ -47,6 +48,11 @@ export function validateExam(exam) {
       for (const k of q.key || []) if (!letters.includes(String(k).toUpperCase())) errors.push(`${tag}: “${k}” geçerli bir seçenek değil (${letters.join(', ')}).`);
     }
     if (q.type === 'gap' && !q.key?.some(k => String(k).trim())) errors.push(`${tag}: doğru cevap boş.`);
+    if (q.type === 'open') {
+      if (!String(q.text || '').trim()) errors.push(`${tag}: soru metni boş; açık uçlu cevap sorusuz değerlendirilemez.`);
+      if (!String(q.modelAnswer || '').trim() && !(q.keyPoints || []).some(k => String(k).trim())) errors.push(`${tag}: örnek cevap ya da olması gereken noktalardan en az biri girilmeli.`);
+      if (!(Number(q.lines) >= 1)) errors.push(`${tag}: cevap satırı sayısı en az 1 olmalı.`);
+    }
     if (q.type === 'writing') {
       const w = q.rubric || {};
       if (!Object.values(w).some(v => Number(v) > 0)) errors.push(`${tag}: en az bir rubrik ölçütünün ağırlığı 0'dan büyük olmalı.`);
@@ -55,6 +61,8 @@ export function validateExam(exam) {
     }
     if ((q.type === 'mc' || q.type === 'gap') && !String(q.text || '').trim()) warnings.push(`${tag}: soru metni boş; yanlış cevaplar için kural açıklaması üretilemez, yalnızca doğru cevap gösterilir.`);
   }
+  const lw = Number(exam.langWeight ?? 30);
+  if (exam.questions?.some(q => q.type === 'open') && !(lw >= 0 && lw <= 100)) errors.push('Açık uçlu sorularda dil payı 0 ile 100 arasında olmalı.');
   if (total && Math.abs(total - 100) > 1e-9) warnings.push(`Toplam puan ${total}; not 100'e ölçeklenecek.`);
   return { errors, warnings, total };
 }

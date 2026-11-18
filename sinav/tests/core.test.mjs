@@ -198,3 +198,48 @@ test('birleştirme: OMR + boşluk + writing → numaralı hatalar, kurallar, ön
   assert.ok(r.suggestions[0].box);
   assert.equal(r.feedback.improvements.length, 3);
 });
+
+test('açık uçlu: nokta nokta içerik + dil payı, kısmi puan, içerik yanlışsa dil puanı yok', async () => {
+  const { scoreOpen, contentPoints } = await import('../js/core/scoring.js');
+  const q = { id: 'o1', no: 1, type: 'open', points: 10, text: 'Why did Tom go to London?', modelAnswer: 'To visit his grandmother.', keyPoints: ['went to London', 'to visit his grandmother'] };
+  const ev = { points: [{ index: 0, verdict: 'karsilandi', justification: 'a' }, { index: 1, verdict: 'kismen', justification: 'b' }], language: { band: 2, justification: 'c' } };
+  // içerik 7 × 0,75 = 5,25 + dil 3 × 2/4 = 1,5 → 6,75 → 7
+  const s = scoreOpen(q, ev, 30);
+  assert.equal(s.earned, 7);
+  assert.match(s.reason, /İçerik: 1\/2 nokta \(1 kısmen\) · Dil: 2\/4/);
+  assert.equal(s.needsReview, false);
+  // dil payı %0: yalnızca içerik
+  assert.equal(scoreOpen(q, ev, 0).earned, 7.5);
+  // içerik tamamen yanlış → dil puanı verilmez
+  const wrong = scoreOpen(q, { points: [{ index: 0, verdict: 'eksik', justification: 'x' }, { index: 1, verdict: 'eksik', justification: 'y' }], language: { band: 4, justification: 'z' } }, 30);
+  assert.equal(wrong.earned, 0);
+  assert.match(wrong.reason, /içerik yanlış olduğu için puanlanmadı/);
+  // gerekçesiz karar → öğretmen kontrolü
+  assert.equal(scoreOpen(q, { points: [{ index: 0, verdict: 'karsilandi', justification: '' }], language: { band: 3, justification: 'ok' } }, 30).needsReview, true);
+  // nokta girilmediyse örnek cevabın anlamı tek nokta
+  assert.deepEqual(contentPoints({ keyPoints: [] }), ['Örnek cevaptaki anlamı veriyor']);
+});
+
+test('açık uçlu birleştirme: dil hatası dil puanını, Key hatası içeriği etkiler; doğrulama kuralları', async () => {
+  const exam = newExam({ name: 'Open', cefr: 'A2', langWeight: 30, questions: [
+    { id: 'o1', no: 1, type: 'open', points: 10, lines: 3, text: 'Why did Tom go to London?', modelAnswer: 'To visit his grandmother.', keyPoints: [] }
+  ] });
+  const regions = [enforceIllegible({ questionId: 'o1', rect: { x: 90, y: 600, w: 1060, h: 150 }, lines: [line(1, 'He go to Paris'), line(2, 'for visit his grandmother')] })];
+  const evaluation = {
+    open: [{ questionId: 'o1', points: [{ index: 0, verdict: 'kismen', justification: 'Ziyaret doğru, şehir yanlış.' }], language: { band: 2, justification: 'Zaman ve edat hataları.' },
+      errors: [
+        { line: 1, quote: 'go', code: 'T', ruleId: 'past', correction: 'went', original: 'He go to Paris', corrected: 'He went to Paris', severity: 'bozmuyor', certain: true },
+        { line: 1, quote: 'Paris', code: 'Key', ruleId: 'q1-city', correction: 'London', original: 'He go to Paris', corrected: 'He go to London', severity: 'bozuyor', certain: true }
+      ], suggestions: [] }],
+    rules: [{ ruleId: 'past', code: 'T', explanation: 'Geçmiş zaman: V2.', example: 'I went home.' }, { ruleId: 'q1-city', code: 'Key', explanation: 'Metne göre Tom Londra’ya gitti.', example: '' }]
+  };
+  const r = assemble({ exam, regions, evaluation });
+  assert.equal(r.scores[0].earned, 5); // 7 × 0,5 = 3,5 + 3 × 2/4 = 1,5 → 5
+  assert.deepEqual(r.errors.map(e => [e.code, e.impact.kind]), [['T', 'language'], ['Key', 'content']]);
+  assert.equal(impactText(r.errors[0]), "Dil puanını etkiliyor (sorunun %30'i)");
+  assert.equal(impactText(r.errors[1]), 'İçerik puanını düşürüyor');
+  assert.equal(impactText({ impact: { kind: 'language', weight: 0 } }), 'Yalnızca işaretlendi; puan kırmaz (dil payı %0)');
+  const v = validateExam(newExam({ name: 'x', questions: [{ id: 'a', no: 1, type: 'open', points: 10, lines: 3, text: '', modelAnswer: '' }] }));
+  assert.ok(v.errors.some(e => /soru metni boş/.test(e)));
+  assert.ok(v.errors.some(e => /örnek cevap/.test(e)));
+});

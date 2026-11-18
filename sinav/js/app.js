@@ -63,7 +63,7 @@ async function renderExams() {
       h('h2', 'İlk sınavınızı tanımlayın'),
       h('p.muted', 'Kırmızı Kalem kağıtları okur, puanlar, her hatayı kağıdın üzerinde gösterir ve nedenini açıklar. Hiçbir not siz onaylamadan kesinleşmez.'),
       h('div.steps',
-        h('div', h('b', '1. Tanımla'), 'Sorular, puanlar, cevap anahtarı, writing rubriği.'),
+        h('div', h('b', '1. Tanımla'), 'Açık uçlu sorular, örnek cevaplar, puanlar; istenirse writing ve test soruları.'),
         h('div', h('b', '2. Yazdır ve yükle'), 'Cevap kağıdını yazdırın; doldurulan kağıtları fotoğraf ya da PDF olarak toplu yükleyin.'),
         h('div', h('b', '3. İncele ve onayla'), 'Kağıt ve değerlendirme yan yana; düzenleyin, onaylayın, e-Okul listesini indirin.')),
       h('a.btn.primary', { href: '#/sinav/yeni' }, 'Yeni sınav oluştur')));
@@ -101,10 +101,11 @@ async function renderEditor(exam) {
     field('Sınav adı', bind(ex, 'name', h('input', { value: ex.name, placeholder: 'ör. 9. Sınıf 1. Dönem 1. Yazılı', required: true }))),
     field('Sınıf düzeyi', sel(ex, 'grade', Object.entries(GRADES))),
     field('Şube', bind(ex, 'className', h('input', { value: ex.className, list: 'roster-names', placeholder: 'ör. 9-A' })), 'Sınıf listesindeki adla eşleşirse öğrenci adları numaradan bulunur.'),
-    field('Hedef CEFR seviyesi', sel(ex, 'cefr', CEFR_LEVELS.map(l => [l, l])), 'Writing beklentisi bu seviyeye göre ayarlanır.'),
+    field('Hedef CEFR seviyesi', sel(ex, 'cefr', CEFR_LEVELS.map(l => [l, l])), 'Dil doğruluğu ve writing beklentisi bu seviyeye göre ayarlanır.'),
     field('Açıklama ve geri bildirim dili', sel(ex, 'explainLang', [['tr', 'Türkçe'], ['en', 'İngilizce']])),
+    field('Açık uçlu sorularda dil payı', bind(ex, 'langWeight', h('select', [[0, '%0 — yalnızca içerik (dil hataları işaretlenir, puan kırmaz)'], [20, '%20'], [30, '%30 (önerilen)'], [40, '%40'], [50, '%50']].map(([v, t]) => h('option', { value: v, selected: Number(ex.langWeight ?? 30) === v }, t))), Number), 'Sorunun puanının bu kadarı dil doğruluğuna, kalanı içeriğe ayrılır. İçerik tamamen yanlışsa dil puanı verilmez.'),
     field('Yazım hatası toleransı', sel(ex, 'spelling', [['esnek', 'Esnek (küçük yazım farkı kabul)'], ['katı', 'Katı (birebir)']]), 'Boşluk doldurma ve kısa cevaplar için.'),
-    field('Kağıt türü', sel(ex, 'sheetMode', [['kirmizikalem', 'Kırmızı Kalem cevap kağıdı (önerilen)'], ['serbest', 'Kendi kağıdım (serbest)']]), 'Önerilen kağıtta kapalı uçlu sorular cihazda optik okunur; ad hiçbir yere gönderilmez.'),
+    field('Kağıt türü', sel(ex, 'sheetMode', [['kirmizikalem', 'Kırmızı Kalem cevap kağıdı (önerilen)'], ['serbest', 'Kendi kağıdım (serbest)']]), 'Önerilen kağıtta sorular basılı gelir, okul numarası cihazda okunur ve ad hiçbir yere gönderilmez.'),
     h('datalist#roster-names', rosters.map(r => h('option', { value: r.id }))));
   const freeOpts = h('div.card.grid', { style: { gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' } },
     field('Karartılacak üst bant (%)', bind(ex, 'redactTop', h('input', { type: 'number', min: 0, max: 50, step: 1, value: Math.round((ex.redactTop ?? 0.15) * 100) }), v => Number(v) / 100), 'Ad ve numaranın yazdığı üst bölüm yapay zekâya gönderilmeden karartılır.'),
@@ -139,14 +140,27 @@ async function renderEditor(exam) {
         h('div.row', Object.keys(CRITERIA).map(c => h('label.row.small', { title: CRITERIA[c].tr }, h('b', c), bind(q.rubric, c, h('input', { type: 'number', min: 0, max: 5, step: 0.5, value: q.rubric[c], style: { width: '70px' } }), Number)))),
         h('span.h.small.muted', 'TA görevi yerine getirme · CC tutarlılık · LR kelime · GRA dilbilgisi. 0 = ölçüt kullanılmaz.')));
     }
+    if (q.type === 'open') {
+      fields.append(field('Cevap satırı (kağıtta)', bind(q, 'lines', h('input', { type: 'number', min: 1, max: 30, value: q.lines }), Number)));
+      fields.append(h('label.f.wide', 'Soru (kağıda basılır)', bind(q, 'text', h('textarea', { rows: 2, placeholder: 'ör. Why did Tom go to London? Answer according to the text.' }, q.text || ''))));
+      fields.append(h('label.f.wide', 'Örnek doğru cevap', bind(q, 'modelAnswer', h('textarea', { rows: 2, placeholder: 'ör. He went to London to visit his grandmother.' }, q.modelAnswer || '')),
+        h('span.h', 'Farklı ama doğru ifadeler de kabul edilir; örnek cevap yalnızca anlamı tarif eder.')));
+      fields.append(h('label.f.wide', 'Olması gereken noktalar (isteğe bağlı, her satıra bir nokta)', bind(q, 'keyPoints', h('textarea', { rows: 2, placeholder: 'ör.\nLondra’ya gitti\nbüyükannesini ziyaret etmek için' }, (q.keyPoints || []).join('\n')), v => v.split('\n').map(x => x.trim()).filter(Boolean)),
+        h('span.h', 'İçerik puanı noktalara eşit bölünür; kısmen karşılanan nokta yarım puan alır. Boş bırakırsanız örnek cevabın anlamı tek nokta sayılır.')));
+      fields.append(field('Kazanım (isteğe bağlı)', bind(q, 'outcome', h('input', { value: q.outcome || '', placeholder: 'ör. E9.1.R1' }))));
+      return h('div.q',
+        h('div', h('div.no', `${q.no}.`), qMoveButtons(q, i)),
+        fields);
+    }
     fields.append(h('label.f.wide', q.type === 'writing' ? 'Görev (yönerge)' : 'Soru metni (isteğe bağlı)', bind(q, 'text', h('textarea', { rows: q.type === 'writing' ? 3 : 2, placeholder: q.type === 'writing' ? 'ör. Write an e-mail to a friend about your last holiday (80–100 words).' : 'Yanlış cevaplarda kuralın açıklanabilmesi için soru metnini yazın.' }, q.text || '')),
       h('span.h', q.type === 'writing' ? 'Görevi yerine getirme ölçütü bu yönergeye göre değerlendirilir.' : '')));
     fields.append(field('Kazanım (isteğe bağlı)', bind(q, 'outcome', h('input', { value: q.outcome || '', placeholder: 'ör. E9.1.R1' }))));
-    return h('div.q',
-      h('div', h('div.no', `${q.no}.`), h('div.row', { style: { justifyContent: 'center', marginTop: '6px' } },
-        h('button.btn.ghost.sm', { title: 'Yukarı taşı', 'aria-label': `Soru ${q.no} yukarı`, disabled: i === 0, onclick: () => { [ex.questions[i - 1], ex.questions[i]] = [ex.questions[i], ex.questions[i - 1]]; renumber(); } }, '↑'),
-        h('button.btn.ghost.sm.danger', { title: 'Sil', 'aria-label': `Soru ${q.no} sil`, onclick: () => { ex.questions.splice(i, 1); renumber(); } }, '✕'))),
-      fields);
+    return h('div.q', h('div', h('div.no', `${q.no}.`), qMoveButtons(q, i)), fields);
+  }
+  function qMoveButtons(q, i) {
+    return h('div.row', { style: { justifyContent: 'center', marginTop: '6px' } },
+      h('button.btn.ghost.sm', { title: 'Yukarı taşı', 'aria-label': `Soru ${q.no} yukarı`, disabled: i === 0, onclick: () => { [ex.questions[i - 1], ex.questions[i]] = [ex.questions[i], ex.questions[i - 1]]; renumber(); } }, '↑'),
+      h('button.btn.ghost.sm.danger', { title: 'Sil', 'aria-label': `Soru ${q.no} sil`, onclick: () => { ex.questions.splice(i, 1); renumber(); } }, '✕'));
   }
   function renumber() { ex.questions.forEach((q, i) => { q.no = i + 1; }); drawQuestions(); refresh(); }
   function refresh() {
@@ -173,11 +187,22 @@ async function renderEditor(exam) {
   }
   const addBar = h('div.row', Object.entries(QUESTION_TYPES).map(([k, v]) => h('button.btn.sm', { onclick: () => { ex.questions.push(newQuestion(k, ex.questions.length + 1)); drawQuestions(); refresh(); list.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'center' }); } }, `+ ${v.tr}`)));
   const quick = h('button.btn.sm', { onclick: async () => {
-    const r = await modal(close => { const n = h('input', { type: 'number', min: 1, max: 60, value: 10 }), p = h('input', { type: 'number', min: 0.5, step: 0.5, value: 2 }), o = h('select', [4, 5, 3].map(x => h('option', { value: x }, `${x} seçenek`)));
-      return h('div', h('h2', 'Çoktan seçmeli soruları hızlı ekle'), h('div.grid', field('Soru sayısı', n), field('Her biri kaç puan', p), field('Seçenek', o)),
-        h('div.row', { style: { marginTop: '12px' } }, h('span.spacer'), h('button.btn', { onclick: () => close() }, 'Vazgeç'), h('button.btn.primary', { onclick: () => close({ n: Number(n.value), p: Number(p.value), o: Number(o.value) }) }, 'Ekle'))); });
+    const r = await modal(close => {
+      const t = h('select', [['open', 'Açık uçlu'], ['mc', 'Çoktan seçmeli']].map(([v, x]) => h('option', { value: v }, x)));
+      const n = h('input', { type: 'number', min: 1, max: 60, value: 5 }), p = h('input', { type: 'number', min: 0.5, step: 0.5, value: 10 });
+      const o = h('input', { type: 'number', min: 1, max: 30, value: 3 });
+      const oLabel = h('span', 'Cevap satırı');
+      t.addEventListener('change', () => { oLabel.textContent = t.value === 'mc' ? 'Seçenek sayısı' : 'Cevap satırı'; o.value = t.value === 'mc' ? 4 : 3; p.value = t.value === 'mc' ? 2 : 10; });
+      return h('div', h('h2', 'Soruları hızlı ekle'), h('div.grid', field('Soru tipi', t), field('Soru sayısı', n), field('Her biri kaç puan', p), h('label.f', oLabel, o)),
+        h('p.small.muted', 'Soru metinlerini ve cevapları sonra tek tek doldurursunuz.'),
+        h('div.row', { style: { marginTop: '12px' } }, h('span.spacer'), h('button.btn', { onclick: () => close() }, 'Vazgeç'), h('button.btn.primary', { onclick: () => close({ t: t.value, n: Number(n.value), p: Number(p.value), o: Number(o.value) }) }, 'Ekle')));
+    });
     if (!r) return;
-    for (let i = 0; i < r.n; i++) { const q = newQuestion('mc', ex.questions.length + 1); q.points = r.p; q.options = r.o; ex.questions.push(q); }
+    for (let i = 0; i < r.n; i++) {
+      const q = newQuestion(r.t, ex.questions.length + 1); q.points = r.p;
+      if (r.t === 'mc') q.options = Math.max(2, Math.min(6, r.o)); else q.lines = Math.max(1, r.o);
+      ex.questions.push(q);
+    }
     drawQuestions(); refresh();
   } }, '⚡ Hızlı ekle');
 

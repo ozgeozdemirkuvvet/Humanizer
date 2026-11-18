@@ -20,7 +20,7 @@ export const CODE_BITS = Array.from({ length: 8 }, (_, i) => ({ x: 140 + i * 46,
 export const NUMBER_GRID = { cols: 4, x0: 930, dx: 58, y0: 176, dy: 27, r: 10 };
 export const BUBBLE_R = 11;
 const MARGIN_X = 90, CONTENT_TOP = 470, CONTENT_BOTTOM = 1650;
-const LINE_H = 50, MC_ROW = 34, MC_DX = 36, GAP_H = 64;
+const LINE_H = 50, MC_ROW = 34, MC_DX = 36, GAP_H = 64, OPEN_TEXT_H = 25;
 
 /**
  * Sınavın cevap kağıdı yerleşimi.
@@ -80,7 +80,27 @@ export function layoutSheet(exam) {
     y += 8;
   }
 
-  // 3) Writing: numaralı satırlar; sığmazsa sonraki sayfada devam eder (numaralar sürer)
+  // 3) Açık uçlu sorular: soru metni kağıda basılır, altına numaralı cevap satırları (kağıt = sınavın kendisi)
+  for (const q of exam.questions.filter(x => x.type === 'open')) {
+    const textLines = wrapText(`${q.no}. ${q.text || ''}`.trim(), 92);
+    const need = textLines.length * OPEN_TEXT_H + 10 + LINE_H * Math.min(Math.max(1, Number(q.lines) || 4), 3);
+    if (y + need > CONTENT_BOTTOM) next();
+    textLines.forEach((t, i) => page.labels.push({ kind: i ? 'qtext' : 'qtext-first', x: MARGIN_X, y: y + 20 + i * OPEN_TEXT_H, text: t }));
+    y += textLines.length * OPEN_TEXT_H + 10;
+    let left = Math.max(1, Number(q.lines) || 4), n = 1;
+    while (left > 0) {
+      let fit = Math.floor((CONTENT_BOTTOM - y) / LINE_H);
+      if (fit < 1) { next(); page.labels.push({ kind: 'section', x: MARGIN_X, y: y + 22, text: `${q.no}. soru (devam)` }); y += 40; fit = Math.floor((CONTENT_BOTTOM - y) / LINE_H); }
+      const count = Math.min(left, fit);
+      const rect = { x: MARGIN_X, y, w: PAGE_W - 2 * MARGIN_X, h: count * LINE_H };
+      const lines = Array.from({ length: count }, (_, i) => ({ n: n + i, y0: y + i * LINE_H, y1: y + (i + 1) * LINE_H }));
+      page.writing.push({ questionId: q.id, kind: 'open', rect, firstLine: n, lines });
+      n += count; left -= count; y += count * LINE_H;
+    }
+    y += 22;
+  }
+
+  // 4) Writing: numaralı satırlar; sığmazsa sonraki sayfada devam eder (numaralar sürer)
   for (const q of exam.questions.filter(x => x.type === 'writing')) {
     let left = Math.max(1, Number(q.lines) || 16);
     let n = 1;
@@ -93,11 +113,25 @@ export function layoutSheet(exam) {
       const count = Math.min(left, fit);
       const rect = { x: MARGIN_X, y, w: PAGE_W - 2 * MARGIN_X, h: count * LINE_H };
       const lines = Array.from({ length: count }, (_, i) => ({ n: n + i, y0: y + i * LINE_H, y1: y + (i + 1) * LINE_H }));
-      page.writing.push({ questionId: q.id, rect, firstLine: n, lines });
+      page.writing.push({ questionId: q.id, kind: 'writing', rect, firstLine: n, lines });
       n += count; left -= count; y += count * LINE_H + 20;
     }
   }
   return { pages, fingerprint: examFingerprint(exam) };
+}
+
+/** Basit satır kırma (yazdırılan soru metni için); satır sonları korunur. */
+export function wrapText(text, max) {
+  const out = [];
+  for (const para of String(text).split(/\n/)) {
+    let line = '';
+    for (const w of para.split(/\s+/).filter(Boolean)) {
+      if (line && (line + ' ' + w).length > max) { out.push(line); line = w; }
+      else line = line ? `${line} ${w}` : w;
+    }
+    out.push(line);
+  }
+  return out.length ? out : [''];
 }
 
 function newPage(index) { return { index, bubbles: [], boxes: [], writing: [], labels: [] }; }
@@ -166,7 +200,8 @@ export function renderSheetSVG(exam, layout, pageIndex, opts = {}) {
   if (opts.className) o.push(`<text x="${MARGIN_X + 14}" y="272" font-size="22" fill="${ink}">${esc(opts.className)}</text>`);
   o.push(`<text x="${MARGIN_X}" y="330" font-size="24" font-weight="700" fill="${ink}">${esc(exam.name)}</text>`);
   o.push(`<text x="${MARGIN_X}" y="362" font-size="16" fill="#444">${esc([exam.className, exam.cefr && `Hedef seviye ${exam.cefr}`].filter(Boolean).join(' · '))}</text>`);
-  o.push(`<text x="${MARGIN_X}" y="398" font-size="15" fill="#444">Baloncukları koyu kalemle tamamen doldurun; değiştirmek için iyice silin.</text>`);
+  const hasBubbles = layout.pages.some(pp => pp.bubbles.length);
+  o.push(`<text x="${MARGIN_X}" y="398" font-size="15" fill="#444">${hasBubbles ? 'Baloncukları koyu kalemle tamamen doldurun; değiştirmek için iyice silin.' : 'Cevaplarınızı numaralı satırlara, kutunun içine okunaklı yazın; değiştirmek için üstünü çizin.'}</text>`);
   o.push(`<text x="${MARGIN_X}" y="420" font-size="15" fill="#444">Okul numaranızı sağdaki tabloya soldan başlayarak işaretleyin.</text>`);
   // Numara tablosu
   const g = NUMBER_GRID;
@@ -187,6 +222,7 @@ export function renderSheetSVG(exam, layout, pageIndex, opts = {}) {
   for (const l of p.labels) {
     if (l.kind === 'section') o.push(`<text x="${l.x}" y="${l.y}" font-size="18" font-weight="700" fill="${ink}">${esc(l.text)}</text>`);
     else if (l.kind === 'qno') o.push(`<text x="${l.x}" y="${l.y}" font-size="17" text-anchor="end" fill="${ink}">${esc(l.text)}</text>`);
+    else if (l.kind === 'qtext-first' || l.kind === 'qtext') o.push(`<text x="${l.x}" y="${l.y}" font-size="17" ${l.kind === 'qtext-first' ? 'font-weight="600" ' : ''}fill="${ink}" xml:space="preserve">${esc(l.text)}</text>`);
     else if (l.kind === 'boxno') o.push(`<text x="${l.x}" y="${l.y}" font-size="15" fill="#555">${esc(l.text)}</text>`);
   }
   const fill = opts.fill || {};

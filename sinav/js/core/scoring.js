@@ -2,7 +2,7 @@
 // Kapalı uçlu ve boşluk doldurma soruları tamamen yerelde puanlanır; writing puanı rubrik bantlarından hesaplanır.
 
 import { rubricPoints, clampBand } from './rubric.js';
-import { CRITERION_LIST, CRITERIA } from './codes.js';
+import { CRITERION_LIST, CRITERIA, VERDICTS } from './codes.js';
 
 /** Karşılaştırma için normalleştirme: küçük harf, akıllı tırnak, boşluk, sondaki noktalama. */
 export function normalizeAnswer(s) {
@@ -143,6 +143,49 @@ export function scoreWriting(q, rubric, stats = {}) {
     questionId: q.id, max, earned, auto: true, rubric: bands, reason,
     needsReview: missing.length > 0,
     ...(missing.length ? { reviewReason: `Gerekçesi eksik ölçüt: ${missing.map(m => CRITERIA[m.criterion].tr).join(', ')}` } : {})
+  };
+}
+
+/** Açık uçlu sorunun içerik noktaları: öğretmen girmediyse örnek cevabın anlamı tek nokta sayılır. */
+export function contentPoints(q) {
+  const kp = (q.keyPoints || []).map(k => String(k).trim()).filter(Boolean);
+  return kp.length ? kp : ['Örnek cevaptaki anlamı veriyor'];
+}
+
+/**
+ * Açık uçlu soru: içerik (nokta nokta, kısmi puanlı) + dil doğruluğu (0–4 bant).
+ * puan = içerik payı × ortalama(nokta oranı) + dil payı × bant/4 ; 0,5'e yuvarlanır.
+ * İçerik tamamen eksik/yanlışsa dil puanı verilmez (alakasız ama düzgün cümle puan almaz).
+ * Gerekçesi eksik karar öğretmen kontrolüne düşer.
+ * @param {object} q
+ * @param {{points:{index:number, verdict:string, justification:string}[], language:{band:number, justification:string}}} ev
+ * @param {number} langWeight 0–100 (sınav ayarı)
+ */
+export function scoreOpen(q, ev, langWeight = 30) {
+  const max = Number(q.points) || 0;
+  const cps = contentPoints(q);
+  const w = Math.max(0, Math.min(100, Number(langWeight))) / 100;
+  const points = cps.map((text, index) => {
+    const v = (ev?.points || []).find(p => p.index === index);
+    const verdict = VERDICTS[v?.verdict] ? v.verdict : 'eksik';
+    return { index, text, verdict, justification: String(v?.justification || '').trim(), missing: !v };
+  });
+  const ratio = points.reduce((a, p) => a + VERDICTS[p.verdict].ratio, 0) / points.length;
+  const rawBand = Math.round(Number(ev?.language?.band));
+  let band = Number.isFinite(rawBand) ? Math.max(0, Math.min(4, rawBand)) : 0;
+  const language = { band, justification: String(ev?.language?.justification || '').trim() };
+  if (ratio === 0) band = 0;
+  const earned = Math.round((max * (1 - w) * ratio + max * w * band / 4) * 2) / 2;
+  const met = points.filter(p => p.verdict === 'karsilandi').length, part = points.filter(p => p.verdict === 'kismen').length;
+  let reason = `İçerik: ${met}/${points.length} nokta` + (part ? ` (${part} kısmen)` : '');
+  if (w > 0) reason += ratio === 0 ? ' · Dil: içerik yanlış olduğu için puanlanmadı' : ` · Dil: ${band}/4`;
+  const gaps = points.filter(p => p.missing || !p.justification);
+  const needsLang = w > 0 && ratio > 0 && !language.justification;
+  return {
+    questionId: q.id, max, earned, auto: true, reason,
+    open: { points, language, langWeight: Math.round(w * 100) },
+    needsReview: gaps.length > 0 || needsLang,
+    ...(gaps.length || needsLang ? { reviewReason: gaps.length ? `Gerekçesi eksik içerik kararı: ${gaps.map(g => g.index + 1).join(', ')}. nokta` : 'Dil bandının gerekçesi eksik' } : {})
   };
 }
 

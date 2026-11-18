@@ -3,6 +3,7 @@
 
 import { CODES, CRITERIA, optionLetters } from '../core/codes.js';
 import { rubricPromptText } from '../core/rubric.js';
+import { contentPoints } from '../core/scoring.js';
 import { lineLayout } from '../core/errors.js';
 
 export const READ_SYSTEM = `You transcribe handwritten answers on English-language exam papers for a teacher in a Turkish high school. Your transcription is used for grading, so it must reflect exactly what the student wrote.
@@ -13,14 +14,14 @@ Rules:
 3. confidence is your calibrated probability (0–1) that the word is transcribed exactly right, including its spelling.
 4. Skip words the student clearly crossed out. Do not transcribe any printed text (instructions, line numbers, labels).
 5. box is the word's bounding box in that image, as [x0, y0, x1, y1] on a 0–1000 scale of the image width and height.
-6. Writing regions have printed line numbers in the left margin; use the printed number as the line number n. If a handwritten line sits between two printed lines, use the nearest line above. Short-answer regions are a single line: n = 1.
+6. Writing and open-answer regions have printed line numbers in the left margin; use the printed number as the line number n. If a handwritten line sits between two printed lines, use the nearest line above. Short-answer regions are a single line: n = 1.
 7. Judge only the language. Neat or messy handwriting must not change anything except your confidence.`;
 
 export const READ_SYSTEM_FREEFORM = `${READ_SYSTEM}
 8. This is a whole exam page in the teacher's own format. The top of the page has been blacked out for privacy. For each question listed, find the student's answer on the page:
    - Multiple choice / true-false / matching: put the chosen option letter in answers[] ("" if blank; letters separated by "," if several are marked). For true/false use "D" (doğru/true) or "Y" (yanlış/false).
    - Short answers: put the written answer in answers[], verbatim.
-   - Writing tasks: output a region with region_id = the question id; number the student's handwritten lines from 1 in reading order; boxes are relative to the whole page image.`;
+   - Open-ended questions and writing tasks: output a region with region_id = the question id; number the student's handwritten lines of that answer from 1 in reading order; boxes are relative to the whole page image.`;
 
 /** Aşama A kullanıcı mesajı: her kırpıntı etiketli bir görüntü. */
 export function readUserContent(exam, crops) {
@@ -36,7 +37,8 @@ export function readUserContent(exam, crops) {
   content.push({ type: 'text', text: `Transcribe each region below. Return one entry in regions[] per region_id. answers[] stays empty.` });
   for (const c of crops) {
     const qq = q.get(c.questionId);
-    const what = c.kind === 'writing' ? `writing task Q${qq?.no}, printed lines ${c.firstLine}–${c.lastLine}` : `short answer Q${qq?.no}`;
+    const what = c.kind === 'writing' ? `writing task Q${qq?.no}, printed lines ${c.firstLine}–${c.lastLine}`
+      : c.kind === 'open' ? `open-ended answer Q${qq?.no}, printed lines ${c.firstLine}–${c.lastLine}` : `short answer Q${qq?.no}`;
     content.push({ type: 'text', text: `region_id "${c.regionId}" — ${what}` });
     content.push(imageBlock(c.jpeg));
   }
@@ -78,6 +80,14 @@ RULE EXPLANATIONS (rules[])
 - One entry per rule_id. explanation: the rule in one or two short sentences at the student's level, explaining why the form is wrong (e.g. "'yesterday' geçmiş zamanı gösterir; bu yüzden fiil 2. hâline (went) geçmelidir."). example: one NEW correct English sentence that shows the rule (not the student's sentence).
 - rule_id: a short stable kebab-case id for the underlying rule (e.g. "past-simple-time-expression", "third-person-s", "article-a-an"). Use the same id for the same rule across papers.
 
+HOW TO MARK OPEN-ENDED ANSWERS (open[])
+Each open question comes with the teacher's model answer and numbered content points. Language accuracy counts for ${Number(exam.langWeight ?? 30)}% of the question score and content for the rest.
+1. points[]: one entry per content point (index as given). verdict: "karsilandi" (the answer clearly expresses it, in any wording, synonyms and paraphrases count), "kismen" (partly, vague or incomplete) or "eksik" (missing or wrong). justification: one short sentence citing what the student wrote. Judge meaning, not form: a correct idea with grammar mistakes is still "karsilandi"; language is judged separately. Do not require the model answer's exact words. If the question asks for information from a text, accept any answer that is correct for that question.
+2. language: band 0–4 (4 = accurate for ${exam.cefr}, at most very minor slips; 3 = a few errors, meaning clear; 2 = noticeable errors, meaning mostly clear; 1 = many errors, meaning strained; 0 = not understandable). Calibrate to ${exam.cefr}. justification: one sentence naming the main errors or strengths.
+3. errors[]: mark language errors exactly as for writing (same fields, same rules). If a part of the answer is factually wrong or answers a different question, mark that span with code "Key" (content), severity "bozuyor", and give the correct content as correction.
+4. If the answer is a copied sentence from the question or unrelated, all points are "eksik".
+5. suggestions[]: as for writing; never reduce the score.
+
 WRONG CLOSED-ENDED / SHORT ANSWERS (answer_notes[])
 - For each wrong answer listed in the input, explain briefly why the key is correct and the student's answer is not, with a matching code (use "Key" when no language error code fits), a rule_id, a short example sentence and severity.
 
@@ -98,6 +108,19 @@ FEEDBACK
 export function evalUserText(exam, regions, wrong, prefs = []) {
   const parts = [];
   if (prefs.length) parts.push(`<teacher_preferences>\nThe teacher corrected earlier markings on this exam. Follow these decisions:\n${prefs.map(p => `- ${p}`).join('\n')}\n</teacher_preferences>`);
+  const textOf = q => (regions.find(r => r.questionId === q.id)?.lines || []).map(l => `${l.n}: ${lineLayout(l.words).text}`).join('\n');
+  for (const q of exam.questions.filter(x => x.type === 'open')) {
+    const kp = contentPoints(q);
+    parts.push(`<open question_id="${q.id}" no="${q.no}" points="${q.points}">
+<question>${q.text || ''}</question>
+${q.modelAnswer ? `<model_answer>${q.modelAnswer}</model_answer>\n` : ''}<content_points>
+${kp.map((k, i) => `${i}: ${k}${!(q.keyPoints || []).length ? ' (compare with the model answer)' : ''}`).join('\n')}
+</content_points>
+<student_answer>
+${textOf(q) || '(empty)'}
+</student_answer>
+</open>`);
+  }
   for (const q of exam.questions.filter(x => x.type === 'writing')) {
     const reg = regions.find(r => r.questionId === q.id);
     const lines = (reg?.lines || []).map(l => `${l.n}: ${lineLayout(l.words).text}`).join('\n');
@@ -111,7 +134,7 @@ ${lines || '(empty)'}
   if (wrong.length) {
     parts.push(`<wrong_answers>\n${wrong.map(w => `- question_id "${w.q.id}" (Q${w.q.no}, ${w.q.type})${w.q.text ? ` "${w.q.text}"` : ''}: student answered "${w.given}", key "${(w.q.key || []).join(' / ')}"${w.q.alternatives?.length ? ` (also accepted: ${w.q.alternatives.join(', ')})` : ''}`).join('\n')}\n</wrong_answers>`);
   }
-  parts.push('Mark this paper. Return writing[] for every writing question above, rules[] for every rule_id you use, answer_notes[] for every wrong answer listed, and the feedback.');
+  parts.push('Mark this paper. Return open[] for every open question above, writing[] for every writing question above, rules[] for every rule_id you use, answer_notes[] for every wrong answer listed, and the feedback.');
   return parts.join('\n\n');
 }
 
@@ -123,7 +146,8 @@ export function teacherPreferences(edits) {
     if (e.kind === 'error.delete' && e.before) s = `Do not mark "${e.before.quote}" as ${e.before.code} (${e.before.ruleId || 'rule'}); the teacher removed this marking${e.note ? `: ${e.note}` : ''}.`;
     else if (e.kind === 'error.edit' && e.before && e.after) s = `For "${e.before.quote}", the teacher changed ${diffText(e.before, e.after)}.`;
     else if (e.kind === 'error.add' && e.after) s = `The teacher added a missed error: "${e.after.quote}" → "${e.after.correction}" (${e.after.code}). Watch for similar errors.`;
-    else if (e.kind === 'band.edit' && e.before && e.after) s = `The teacher changed ${e.after.criterion} from band ${e.before.band} to ${e.after.band}${e.note ? ` (${e.note})` : ''}; calibrate similar texts accordingly.`;
+    else if (e.kind === 'band.edit' && e.before && e.after) s = `The teacher changed ${e.after.criterion === 'DIL' ? 'the open-answer language band' : e.after.criterion} from band ${e.before.band} to ${e.after.band}${e.note ? ` (${e.note})` : ''}; calibrate similar texts accordingly.`;
+    else if (e.kind === 'point.edit' && e.before && e.after) s = `For the content point "${e.after.point}", the teacher changed the verdict from "${e.before.verdict}" to "${e.after.verdict}"; judge similar answers the same way.`;
     if (s && !out.includes(s)) out.push(s);
     if (out.length >= 30) break;
   }

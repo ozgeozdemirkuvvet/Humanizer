@@ -10,11 +10,11 @@ Hazırlık, 9 ve 11. sınıflar ile CEFR A1–B2 seviyeleri için tasarlandı. N
 
 | Adım | Ne olur? |
 |---|---|
-| **1. Sınav tanımı** | Sınav adı, sınıf, hedef CEFR seviyesi ve sorular girilir: çoktan seçmeli, doğru/yanlış, eşleştirme, boşluk doldurma ve writing. Her soru için puan, cevap anahtarı, kabul edilen alternatifler ve rubrik ağırlıkları belirlenir. Kazanım eşlemesi isteğe bağlıdır. |
-| **2. Cevap kağıdı** | Uygulama A4 bir cevap kağıdı üretir. Kağıtta köşe işaretçileri, okul numarası tablosu, baloncuklar, kısa cevap kutuları ve satır numaralı writing alanı bulunur. Kendi kağıdınızı da kullanabilirsiniz (serbest mod). |
+| **1. Sınav tanımı** | Sınav adı, sınıf, hedef CEFR seviyesi ve sorular girilir. Temel soru tipi **açık uçlu**dur: soru, örnek doğru cevap ve isteğe bağlı "olması gereken noktalar". Ayrıca writing (kompozisyon), boşluk doldurma ve gerekirse test soruları eklenebilir. Kazanım eşlemesi isteğe bağlıdır. |
+| **2. Cevap kağıdı** | Uygulama A4 bir sınav kağıdı üretir. **Soru metinleri basılıdır**, her sorunun altında numaralı cevap satırları vardır. Kağıtta ayrıca köşe işaretçileri ve okul numarası tablosu bulunur. Kendi kağıdınızı da kullanabilirsiniz (serbest mod). |
 | **3. Yükleme** | Fotoğraflar ve taranmış PDF'ler toplu yüklenir. Sayfalar otomatik düzeltilir (perspektif, dönme, eğiklik) ve kırpılır. Okul numarası okunup sınıf listesindeki adla eşlenir; kimliği öğretmen onaylar. |
 | **4. Okuma** | Baloncuklar **cihazda** okunur. El yazısı Claude ile kelime kelime okunur ve her kelimenin bir güven skoru olur. Okunamayan kelime tahmin edilmez, **[okunamadı]** olarak işaretlenir. |
-| **5. Puanlama** | Kapalı uçlu sorular anahtarla birebir karşılaştırılır. Boşluk doldurmada alternatif cevaplar kabul edilir ve yazım toleransı katı ya da esnek seçilebilir. Writing dört ölçütle (TA, CC, LR, GRA) 0–5 bant üzerinden, hedef CEFR seviyesine kalibre edilerek puanlanır. Her puanın bir gerekçesi vardır. |
+| **5. Puanlama** | **Açık uçlu:** Her içerik noktası "karşılandı / kısmen / eksik" olarak değerlendirilir ve gerekçesi yazılır. Farklı ama doğru ifadeler kabul edilir. Puanın belirlenen payı (öntanımlı %30) dil doğruluğuna ayrılır (0–4 bant, seviyeye göre). İçerik tamamen yanlışsa dil puanı verilmez. Kapalı uçlu sorular anahtarla birebir karşılaştırılır. Boşluk doldurmada alternatif cevaplar kabul edilir ve yazım toleransı katı ya da esnek seçilebilir. Writing dört ölçütle (TA, CC, LR, GRA) 0–5 bant üzerinden, hedef CEFR seviyesine kalibre edilerek puanlanır. Her puanın bir gerekçesi vardır. |
 | **6. Hata analizi** | Her hata için şunlar verilir: konum (soru ve satır, kağıt üzerinde numaralı işaret), kod (Gr, Sp, WW, WO, T, Agr, Art, Prep, P, ^), yazılan ve doğru biçim, sade dille neden, benzer bir örnek, puana etkisi ve ciddiyet. Tekrarlayan hatalar tek tek işaretlenir ama bir kez açıklanır: "Bu hata kağıtta 4 kez geçiyor (Satır 2, 5, 7, 9)". |
 | **7. Geri bildirim** | Her öğrenciye 1 güçlü yön, en fazla 3 gelişim alanı ve 1 somut çalışma önerisi yazılır. Dil Türkçe ya da İngilizce olabilir. |
 | **8. Onay ve çıktı** | Öğretmen her puanı, bandı, hatayı ve okumayı düzenleyebilir. Düzenlemeler kaydedilir ve sonraki değerlendirmelerde dikkate alınır. Onaylı notlar e-Okul CSV dosyası olarak indirilir. |
@@ -28,12 +28,24 @@ Hazırlık, 9 ve 11. sınıflar ile CEFR A1–B2 seviyeleri için tasarlandı. N
 <img src="docs/sonuclar.png" alt="Sonuçlar: sınıf ortalaması, not listesi, e-Okul CSV indirme düğmesi, soru bazında başarı" width="560">
 </p>
 
+### Açık uçlu soruda puan nasıl hesaplanır?
+
+Örnek: 10 puanlık soru, dil payı %30, iki içerik noktası.
+
+| | Karar | Hesap |
+|---|---|---|
+| İçerik (7 puan) | 1. nokta karşılandı, 2. nokta kısmen | 7 × (1 + 0,5) / 2 = 5,25 |
+| Dil (3 puan) | Bant 2/4 (belirgin hatalar, anlam açık) | 3 × 2/4 = 1,5 |
+| **Toplam** | | 6,75 → **7** (0,5'e yuvarlanır) |
+
+Dil hataları kağıt üzerinde writing'deki gibi tek tek işaretlenir (kod, doğru biçim, neden, örnek) ve "Dil puanını etkiliyor" olarak gösterilir. Yanlış bilgi `Key` (yanlış cevap / içerik) olarak işaretlenir. Öğretmen her noktanın kararını ve dil bandını tek tıkla değiştirebilir; puan anında yeniden hesaplanır ve karar sonraki kağıtlar için kaydedilir.
+
 ## Hızlı başlangıç
 
 1. Uygulamayı açın: **https://ozgeozdemirkuvvet.github.io/Humanizer/sinav/** ya da yerelde `npm start` çalıştırıp `http://localhost:8080/sinav/` adresine gidin.
 2. **Ayarlar** bölümüne Anthropic API anahtarınızı girin. Anahtar olmadan da kapalı uçlu sorular puanlanır.
 3. **Sınıflar** bölümüne e-Okul'dan aldığınız listeyi (`No;Ad Soyad`) yapıştırın.
-4. **Yeni sınav** oluşturun, kaydedin, **Cevap kağıdı**nı yazdırın.
+4. **Yeni sınav** oluşturun. **⚡ Hızlı ekle** ile açık uçlu soruları ekleyin, her birine soru metnini ve örnek cevabı yazın. Kaydedin ve **Cevap kağıdı**nı yazdırın.
 5. Doldurulan kağıtların fotoğraflarını ya da PDF'ini **Kağıtlar** ekranına sürükleyin.
 6. **İncelemeye başla** düğmesine basın. Her kağıdı gözden geçirip `A` ile onaylayın.
 7. **Sonuçlar** sekmesinden **e-Okul CSV indir** düğmesine basın.

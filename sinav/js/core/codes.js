@@ -13,7 +13,7 @@ export const CODES = Object.freeze({
   Prep: { tr: 'Edat (Preposition)', en: 'Preposition', criterion: 'GRA' },
   P: { tr: 'Noktalama', en: 'Punctuation', criterion: 'CC' },
   '^': { tr: 'Eksik kelime', en: 'Missing word', criterion: 'GRA' },
-  Key: { tr: 'Yanlış cevap', en: 'Wrong answer', criterion: null }
+  Key: { tr: 'Yanlış cevap / içerik', en: 'Wrong answer / content', criterion: null }
 });
 export const CODE_LIST = Object.keys(CODES);
 
@@ -48,12 +48,32 @@ export function markTone(item) {
 }
 
 export const QUESTION_TYPES = Object.freeze({
+  open: { tr: 'Açık uçlu', closed: false, text: true },
+  writing: { tr: 'Writing (kompozisyon)', closed: false, text: true },
+  gap: { tr: 'Boşluk doldurma (tek kelime)', closed: false },
   mc: { tr: 'Çoktan seçmeli', closed: true },
   tf: { tr: 'Doğru / Yanlış', closed: true },
-  match: { tr: 'Eşleştirme', closed: true },
-  gap: { tr: 'Boşluk doldurma / kısa cevap', closed: false },
-  writing: { tr: 'Writing', closed: false }
+  match: { tr: 'Eşleştirme', closed: true }
 });
+
+/** Cevabı satırlarla yazılan ve yapay zekâ ile değerlendirilen tipler (açık uçlu, writing). */
+export const isTextType = t => !!QUESTION_TYPES[t]?.text;
+
+/** Açık uçlu soruda içerik noktası kararı → puan oranı. */
+export const VERDICTS = Object.freeze({
+  karsilandi: { tr: 'Karşılandı', en: 'Met', ratio: 1 },
+  kismen: { tr: 'Kısmen', en: 'Partly met', ratio: 0.5 },
+  eksik: { tr: 'Eksik / yanlış', en: 'Missing / wrong', ratio: 0 }
+});
+
+/** Açık uçlu soruda dil doğruluğu bandı (0–4), seviyeye göre yorumlanır. */
+export const LANG_BANDS = [
+  { band: 4, short: 'Hatasız', tr: 'Hatasız ya da yalnızca çok küçük hatalar', en: 'Accurate; at most very minor slips' },
+  { band: 3, short: 'Az hata', tr: 'Birkaç hata var, anlam açık', en: 'A few errors; meaning clear' },
+  { band: 2, short: 'Belirgin hata', tr: 'Belirgin hatalar, anlam çoğunlukla anlaşılıyor', en: 'Noticeable errors; meaning mostly clear' },
+  { band: 1, short: 'Çok hata', tr: 'Çok hata, anlam zorlanıyor', en: 'Many errors; meaning strained' },
+  { band: 0, short: 'Anlaşılmıyor', tr: 'Anlaşılmıyor ya da cevap yok', en: 'Not understandable or no answer' }
+];
 
 /** Baloncuklu sorunun seçenek harfleri. D/Y Türkçe kağıtlarda alışılmış olandır. */
 export function optionLetters(q) {

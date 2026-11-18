@@ -44,7 +44,7 @@ function sheetPage(rgba, det, exam, layout) {
     crops.push({ regionId: `${b.questionId}-p${pageIndex}`, questionId: b.questionId, kind: 'gap', page: pageIndex, rect, img: warp(rgba, det.H, rect, AI_SCALE, 4) });
   }
   for (const w of page.writing) {
-    crops.push({ regionId: `${w.questionId}-p${pageIndex}`, questionId: w.questionId, kind: 'writing', page: pageIndex, rect: w.rect, firstLine: w.firstLine, lastLine: w.firstLine + w.lines.length - 1, img: warp(rgba, det.H, w.rect, AI_SCALE, 4) });
+    crops.push({ regionId: `${w.questionId}-p${pageIndex}`, questionId: w.questionId, kind: w.kind || 'writing', page: pageIndex, rect: w.rect, firstLine: w.firstLine, lastLine: w.firstLine + w.lines.length - 1, img: warp(rgba, det.H, w.rect, AI_SCALE, 4) });
   }
   return {
     ok: true, mode: 'kirmizikalem', page: pageIndex, examMatch, rotation: det.rotation,

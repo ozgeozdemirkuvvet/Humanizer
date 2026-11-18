@@ -6,7 +6,7 @@
 import { assemble, enforceIllegible, mergeRegions } from './core/assemble.js';
 import { readCrops, evaluate } from './ai/claude.js';
 import { answerBoxFinder, lineBandsFinder } from './vision/sheet.js';
-import { QUESTION_TYPES } from './core/codes.js';
+import { QUESTION_TYPES, isTextType } from './core/codes.js';
 
 /**
  * @param {object} o
@@ -53,7 +53,7 @@ export async function gradePaper({ exam, layout, pages, ai, prefs = [], encode, 
   const local = assemble({ exam, omr, regions, answers, answerBox, lineBands, lang });
 
   let evaluation = null, evalModel = null;
-  const hasWriting = exam.questions.some(q => q.type === 'writing') && regions.some(r => exam.questions.find(q => q.id === r.questionId)?.type === 'writing');
+  const hasWriting = regions.some(r => isTextType(exam.questions.find(q => q.id === r.questionId)?.type));
   const wrong = wrongAnswers(exam, local, omr, regions, answers);
   if (ai && (hasWriting || wrong.length)) {
     onStage('degerlendirme');
@@ -75,7 +75,7 @@ export async function gradePaper({ exam, layout, pages, ai, prefs = [], encode, 
 export function wrongAnswers(exam, local, omr, regions, answers) {
   const out = [];
   for (const q of exam.questions) {
-    if (q.type === 'writing') continue;
+    if (isTextType(q.type)) continue;
     const s = local.scores.find(x => x.questionId === q.id);
     if (!s || s.earned >= s.max) continue;
     let given = '';

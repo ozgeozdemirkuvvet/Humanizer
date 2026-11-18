@@ -40,7 +40,7 @@ export async function renderWorkspace(exam, { mount, app, tab }) {
 
   async function start(files) {
     if (!files.length) return;
-    if (!app.settings.apiKey) toast('API anahtarı yok: kapalı uçlu sorular puanlanır; el yazısı ve writing için Ayarlar’dan anahtar ekleyin.', 6000);
+    if (!app.settings.apiKey) toast('API anahtarı yok: el yazısı okunamaz, açık uçlu cevaplar değerlendirilemez. Ayarlar’dan anahtar ekleyin.', 7000);
     await ingest(exam, files);
   }
 

@@ -41,6 +41,7 @@ function sse(model, text) {
 }
 
 /** Taklit Claude: okuma isteğine sabit el yazısı, değerlendirme isteğine sabit hatalar. */
+const OPEN_ANSWER = ['He go to London', 'for visit his grandmother'];
 const WRITING = ['Last summer I go to Antalya with my family', 'We swim in the sea every day', 'It was very good holiday'];
 function mockReply(body) {
   const user = body.messages[0].content;
@@ -56,10 +57,11 @@ function mockReply(body) {
   if (isRead) {
     const regions = [];
     for (const c of user) {
-      const m = c.type === 'text' && /region_id "([^"]+)" — (writing|short)/.exec(c.text);
+      const m = c.type === 'text' && /region_id "([^"]+)" — (writing|short|open-ended)/.exec(c.text);
       if (!m) continue;
       const words = t => t.split(' ').map((w, i) => ({ text: w, confidence: 0.96, box: [70 + i * 95, 30, 150 + i * 95, 95] }));
-      if (m[2] === 'short') regions.push({ region_id: m[1], lines: [{ n: 1, words: [{ text: 'went', confidence: 0.95, box: [40, 200, 220, 800] }] }] });
+      if (m[2] === 'open-ended') regions.push({ region_id: m[1], lines: OPEN_ANSWER.map((t, i) => ({ n: i + 1, words: words(t).map(w => ({ ...w, box: [w.box[0], 60 + i * 300, w.box[2], 300 + i * 300] })) })) });
+      else if (m[2] === 'short') regions.push({ region_id: m[1], lines: [{ n: 1, words: [{ text: 'went', confidence: 0.95, box: [40, 200, 220, 800] }] }] });
       else regions.push({ region_id: m[1], lines: WRITING.map((t, i) => ({ n: i + 1, words: words(t).map(w => ({ ...w, box: [w.box[0], 20 + i * 125, w.box[2], 100 + i * 125] })) })) });
     }
     return { regions, answers: [] };
@@ -67,6 +69,16 @@ function mockReply(body) {
   const text = user[0].text;
   const wrong = [...text.matchAll(/question_id "([^"]+)" \(Q(\d+), (mc|tf|match|gap)\)/g)].map(m => m[1]);
   return {
+    open: [...text.matchAll(/<open question_id="([^"]+)"[\s\S]*?<content_points>\n([\s\S]*?)\n<\/content_points>/g)].map(m => ({
+      question_id: m[1],
+      points: m[2].split('\n').map((_, i) => ({ index: i, verdict: i === 0 ? 'karsilandi' : 'kismen', justification: i === 0 ? 'Londra’ya gittiğini yazmış.' : 'Ziyaret amacı var ama eksik ifade edilmiş.' })),
+      language: { band: 2, justification: 'Geçmiş zaman ve edat hataları var.' },
+      errors: [
+        { line: 1, quote: 'go', occurrence: 1, code: 'T', rule_id: 'past-simple', correction: 'went', original: 'He go to London for visit his grandmother', corrected: 'He went to London for visit his grandmother', severity: 'bozmuyor', criterion: 'GRA', certain: true, uncertain_reason: '' },
+        { line: 2, quote: 'for visit', occurrence: 1, code: 'WW', rule_id: 'purpose-to-infinitive', correction: 'to visit', original: 'He go to London for visit his grandmother', corrected: 'He go to London to visit his grandmother', severity: 'bozmuyor', criterion: 'GRA', certain: true, uncertain_reason: '' }
+      ],
+      suggestions: []
+    })),
     writing: [...text.matchAll(/<writing question_id="([^"]+)"/g)].map(m => ({
       question_id: m[1],
       rubric: [{ criterion: 'TA', band: 4, justification: 'Tatil anlatılmış; kapanış eksik.' }, { criterion: 'CC', band: 3, justification: 'Basit bağlaçlar.' }, { criterion: 'LR', band: 3, justification: 'Günlük kelimeler.' }, { criterion: 'GRA', band: 2, justification: 'Geçmiş zaman hataları sistematik.' }],
@@ -79,7 +91,8 @@ function mockReply(body) {
     })),
     rules: [
       { rule_id: 'past-simple', code: 'T', explanation: "'last summer' geçmiş zamanı gösterir; fiil 2. hâline geçmelidir.", example: 'We visited our grandparents last weekend.' },
-      { rule_id: 'article-a-singular', code: 'Art', explanation: 'Tekil sayılabilen isimden önce a/an gerekir.', example: 'It was a great day.' }
+      { rule_id: 'article-a-singular', code: 'Art', explanation: 'Tekil sayılabilen isimden önce a/an gerekir.', example: 'It was a great day.' },
+      { rule_id: 'purpose-to-infinitive', code: 'WW', explanation: 'Amaç bildirirken "for + fiil" değil "to + fiil" kullanılır.', example: 'She went to the shop to buy bread.' }
     ],
     answer_notes: wrong.map(id => ({ question_id: id, code: 'Key', rule_id: `key-${id}`, explanation: 'Doğru seçenek anlamı tamamlar.', example: 'She went home.', severity: 'bozuyor' })),
     feedback: { strength: 'Tatilini sırayla ve anlaşılır anlatmışsın.', improvements: ['Geçmiş zaman (V2)', 'a/an kullanımı'], study_tip: 'Her gün 5 düzensiz fiille geçmiş zaman cümlesi yaz.' }
@@ -171,14 +184,15 @@ test('uçtan uca: sınav tanımla → yükle → değerlendir → incele → dü
   await page.getByLabel('Sınav adı').fill('9. Sınıf 1. Yazılı');
   await page.getByLabel('Şube').fill('9-A');
   await page.getByRole('button', { name: '⚡ Hızlı ekle' }).click();
+  await page.getByLabel('Soru tipi').selectOption('mc');
   await page.getByLabel('Soru sayısı').fill('4');
   await page.getByLabel('Her biri kaç puan').fill('10');
   await page.getByRole('dialog').getByRole('button', { name: 'Ekle', exact: true }).click();
   for (const [no, key] of [[1, 'B'], [2, 'A'], [3, 'C'], [4, 'D']]) await page.getByRole('group', { name: `Soru ${no} cevap anahtarı` }).getByRole('button', { name: key }).click();
-  await page.getByRole('button', { name: '+ Boşluk doldurma / kısa cevap' }).click();
+  await page.getByRole('button', { name: '+ Boşluk doldurma (tek kelime)' }).click();
   await page.getByLabel('Doğru cevap').fill('went');
   await page.locator('.q').nth(4).getByLabel('Puan').fill('10');
-  await page.getByRole('button', { name: '+ Writing' }).click();
+  await page.getByRole('button', { name: '+ Writing (kompozisyon)' }).click();
   const wq = page.locator('.q').nth(5);
   await wq.getByLabel('Puan').fill('50');
   await wq.getByLabel('Satır sayısı (kağıtta)').fill('8');
@@ -398,6 +412,69 @@ test('serbest kağıt: köşe işaretçisi yok → kırp, eğikliği düzelt, ü
   await page.getByText('Öğrenci kimliği onaylandı.').waitFor();
   await page.getByRole('button', { name: /✓ Onayla/ }).click();
   await page.waitForFunction(id => window.KK.db.get('papers', id).then(p => p.status === 'onaylandi'), paper.id);
+  assert.deepEqual(errors, []);
+  await context.close();
+});
+
+test('tamamı açık uçlu sınav: soru kağıda basılır, içerik noktaları + dil payıyla puanlanır, öğretmen kararı değiştirir', async () => {
+  const { page, context, errors } = await newPage();
+  await page.goto(base + '#/sinav/yeni');
+  await page.getByLabel('Sınav adı').fill('11. Sınıf Okuma Yazılısı');
+  await page.getByLabel('Şube').fill('9-A');
+  await page.getByRole('button', { name: '⚡ Hızlı ekle' }).click();
+  await page.getByLabel('Soru sayısı').fill('3');
+  await page.getByRole('dialog').getByRole('button', { name: 'Ekle', exact: true }).click();
+  const qs = [
+    ['Why did Tom go to London? Answer according to the text.', 'He went to London to visit his grandmother.', 'Londra’ya gitti\nbüyükannesini ziyaret etmek için'],
+    ['What did Tom do on Saturday?', 'He went to a museum with his cousin.', ''],
+    ['Would you like to visit London? Why?', 'Any reasonable personal answer with a reason.', '']
+  ];
+  for (const [i, [text, model, kp]] of qs.entries()) {
+    const card = page.locator('.q').nth(i);
+    await card.getByLabel('Soru (kağıda basılır)').fill(text);
+    await card.getByLabel('Örnek doğru cevap').fill(model);
+    if (kp) await card.getByLabel(/Olması gereken noktalar/).fill(kp);
+  }
+  await page.getByText('Toplam: 30 puan').waitFor();
+  assert.equal(await page.locator('.notice.err').count(), 0, await page.locator('.notice.err').allInnerTexts().then(x => x.join(' | ')));
+  await page.getByRole('button', { name: 'Kaydet' }).click();
+  await page.getByRole('heading', { name: 'Kağıtları yükleyin' }).waitFor();
+  // Cevap kağıdında soru metinleri basılı
+  await page.getByRole('link', { name: 'Cevap kağıdı' }).click();
+  await page.getByRole('heading', { name: 'Cevap kağıdı' }).waitFor();
+  const svgText = await page.locator('.no-print svg.sheet-page').first().textContent();
+  assert.match(svgText, /1\. Why did Tom go to London\?/);
+  assert.match(svgText, /3\. Would you like to visit London\? Why\?/);
+  await shot(page, '10-acik-uclu-kagit');
+  const exam = (await page.evaluate(() => window.KK.db.all('exams'))).find(e => e.name === '11. Sınıf Okuma Yazılısı');
+  assert.equal(exam.questions.every(q => q.type === 'open'), true);
+  await page.goto(base + `#/sinav/${exam.id}`);
+  await page.locator('input[type=file]').setInputFiles([studentPhoto(exam, { number: '101', answers: {}, seed: 31 })]);
+  await page.waitForFunction(() => [...document.querySelectorAll('tr[data-paper]')].some(r => /İncelemeye hazır/.test(r.textContent)), null, { timeout: 60000 });
+  const req = apiCalls.at(-1).messages[0].content[0].text;
+  assert.match(req, /<open question_id="[^"]+" no="1" points="10">[\s\S]*<model_answer>He went to London to visit his grandmother\.<\/model_answer>[\s\S]*0: Londra’ya gitti\n1: büyükannesini ziyaret etmek için/);
+  assert.match(apiCalls.at(-1).system[0].text, /Language accuracy counts for 30%/);
+  await page.locator('tr[data-paper]').first().click();
+  await page.locator('.paper-inner img[src^="blob:"]').waitFor();
+  // S1: 2 nokta (karşılandı + kısmen) → 7×0,75 + 3×2/4 = 6,75 → 7 ; S2, S3: 1 nokta → 7 + 1,5 = 8,5 ; toplam 24/30 → 80
+  assert.equal(await page.locator('.score-big').innerText(), '80');
+  assert.equal(await page.getByLabel('Soru 1 nokta 2').inputValue(), 'kismen');
+  await page.getByText('Ziyaret amacı var ama eksik ifade edilmiş.').first().waitFor();
+  assert.ok(await page.locator('svg g.mark').count() >= 6, 'her sorunun dil hataları kağıt üzerinde');
+  await page.getByRole('tab', { name: /Hatalar/ }).click();
+  await page.getByText('Amaç bildirirken "for + fiil" değil "to + fiil" kullanılır.').first().waitFor();
+  assert.ok(await page.getByText("Dil puanını etkiliyor (sorunun %30'i)").count() >= 1);
+  await shot(page, '11-acik-uclu-inceleme');
+  // Öğretmen kararı: 2. nokta tam karşılanmış → 7 + 1,5 = 8,5 → 25,5/30 → 85
+  await page.getByRole('tab', { name: 'Özet' }).click();
+  await page.getByLabel('Soru 1 nokta 2').selectOption('karsilandi');
+  await page.getByText('Puan yeniden hesaplandı.').waitFor();
+  assert.equal(await page.locator('.score-big').innerText(), '85');
+  await shot(page, '12-acik-uclu-ozet');
+  const edits = await page.evaluate(() => window.KK.db.all('edits'));
+  assert.ok(edits.some(e => e.kind === 'point.edit' && e.after.verdict === 'karsilandi'));
+  await page.getByRole('button', { name: /✓ Onayla/ }).click();
+  await page.waitForFunction(() => window.KK.db.all('papers').then(ps => ps.some(p => p.status === 'onaylandi' && p.total.grade100 === 85)));
   assert.deepEqual(errors, []);
   await context.close();
 });

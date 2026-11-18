@@ -76,6 +76,7 @@ Tüm kimlikler `crypto.randomUUID()` ile üretilir. Koordinatlar kanonik sayfa p
   "className": "9-A",
   "cefr": "A2",                       // A1 | A2 | B1 | B2
   "explainLang": "tr",                // açıklama ve geri bildirim dili: "tr" | "en"
+  "langWeight": 30,                   // açık uçlu sorularda dil doğruluğunun payı (%)
   "spelling": "esnek",                // "katı" | "esnek"
   "sheetMode": "kirmizikalem",        // "kirmizikalem" | "serbest"
   "redactTop": 0.15,                  // serbest kağıtta karartılacak üst bant oranı
@@ -86,6 +87,10 @@ Tüm kimlikler `crypto.randomUUID()` ile üretilir. Koordinatlar kanonik sayfa p
     { "id": "q3", "no": 3, "type": "match", "points": 2, "options": 5, "key": ["C"] },
     { "id": "q4", "no": 4, "type": "gap", "points": 4,
       "key": ["went"], "alternatives": ["had gone"], "text": "Yesterday I ___ (go) to the cinema." },
+    { "id": "q6", "no": 6, "type": "open", "points": 10, "lines": 3,
+      "text": "Why did Tom go to London? Answer according to the text.",
+      "modelAnswer": "He went to London to visit his grandmother.",
+      "keyPoints": ["Londra'ya gitti", "büyükannesini ziyaret etmek için"] },   // boşsa örnek cevabın anlamı tek nokta
     { "id": "q5", "no": 5, "type": "writing", "points": 30,
       "text": "Write an e-mail to a friend about your last holiday (80–100 words).",
       "minWords": 80, "maxWords": 100, "lines": 18,
@@ -210,6 +215,7 @@ Aşama B istemine aynı sınavın son 30 düzenlemesi kısa kurallar hâlinde ek
 |---|---|
 | `mc`, `tf`, `match` | Anahtarla birebir eşleşme gerekir. Boş cevap 0 puan alır. Birden fazla işaret 0 puan alır ve "Öğretmen kontrolü gerekli" olur. Belirsiz baloncukta da öğretmen kontrolü istenir. |
 | `gap` | Metin normalleştirilir: küçük harf, boşluklar tekleştirilir, akıllı tırnaklar düzeltilir, sondaki nokta atılır. Ardından anahtar ve alternatiflerle karşılaştırılır. *Katı* modda tam eşleşme aranır. *Esnek* modda uzunluk 4–7 karakterse 1, 8 ve üzeriyse 2 harflik yazım farkı kabul edilir. Tam puan verilir, ama turuncu bir **Sp** hatası 0 puan etkisiyle eklenir. Okuma güveni düşükse öğretmen kontrolü istenir. |
+| `open` | Her içerik noktası `karsilandi` (1) / `kismen` (0,5) / `eksik` (0) olarak, gerekçesiyle değerlendirilir. Puan = soru puanı × [(1 − dil payı) × ortalama nokta oranı + dil payı × dil bandı/4], 0,5'e yuvarlanır. İçerik oranı 0 ise dil puanı verilmez. Dil hataları `impact: {kind: "language"}`, yanlış bilgi `Key` koduyla `impact: {kind: "content"}` taşır. Skor kaydında `open: {points[], language{band, justification}, langWeight}` tutulur. |
 | `writing` | 4 ölçüt (TA, CC, LR, GRA) 0–5 bant üzerinden puanlanır. Puan = soru puanı × Σ(ağırlık × bant/5) / Σ ağırlık, 0,5'e yuvarlanır. Bant tanımları CEFR seviyesine göre kalibre edilmiştir. Kelime sayısı yerelde hesaplanır ve TA gerekçesine eklenir. |
 | Toplam | Sınavın toplam puanı 100 değilse 100'e ölçeklenir. e-Okul notu yarım yukarı yuvarlanır. |
 

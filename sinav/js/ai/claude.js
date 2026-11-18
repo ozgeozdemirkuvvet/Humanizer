@@ -94,7 +94,7 @@ export async function readCrops(ctx, exam, crops) {
   const content = readUserContent(exam, crops);
   const res = await callStructured({
     ...ctx, effort: ctx.readEffort || 'medium', system, content, schema: READ_SCHEMA,
-    cacheKeyParts: ['read-v1', ctx.model, system, exam.questions.map(q => [q.id, q.type]), crops.map(c => [c.regionId, c.kind, c.firstLine, c.hash || c.jpeg])]
+    cacheKeyParts: ['read-v2', ctx.model, system, exam.questions.map(q => [q.id, q.type]), crops.map(c => [c.regionId, c.kind, c.firstLine, c.hash || c.jpeg])]
   });
   const ids = free ? exam.questions.map(q => q.id) : crops.map(c => c.regionId);
   return { ...normalizeRead(res.data, ids), model: res.model, cached: res.cached };
@@ -108,7 +108,7 @@ export async function evaluate(ctx, exam, regions, wrong, prefs) {
   const text = evalUserText(exam, regions, wrong, prefs);
   const res = await callStructured({
     ...ctx, effort: ctx.evalEffort || 'high', system, content: [{ type: 'text', text }], schema: EVAL_SCHEMA,
-    cacheKeyParts: ['eval-v1', ctx.model, system, text]
+    cacheKeyParts: ['eval-v2', ctx.model, system, text]
   });
   return { ...normalizeEval(res.data), model: res.model, cached: res.cached };
 }

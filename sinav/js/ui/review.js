@@ -5,10 +5,10 @@
 import { h, s, $$, toast, modal, confirmDialog, fmt } from './dom.js';
 import { db } from '../store/db.js';
 import { uid } from '../core/exam.js';
-import { CODES, CODE_LIST, CRITERIA, SEVERITY, QUESTION_TYPES, codeLabel, markTone, optionLetters } from '../core/codes.js';
+import { CODES, CODE_LIST, CRITERIA, SEVERITY, VERDICTS, LANG_BANDS, isTextType, QUESTION_TYPES, codeLabel, markTone, optionLetters } from '../core/codes.js';
 import { groupRecurring, groupKey, recurrenceText, explanationOf, impactText, errorTable, errorTableMarkdown, lineLayout } from '../core/errors.js';
 import { rubricPoints, BANDS } from '../core/rubric.js';
-import { scoreClosed, totals } from '../core/scoring.js';
+import { scoreClosed, scoreOpen, totals } from '../core/scoring.js';
 import { reevaluate, reassemble, configure } from '../engine.js';
 import { STATUS, studentLabel, sortPapers } from './workspace.js';
 
@@ -211,7 +211,8 @@ export async function renderReview(exam, paperId, { mount, app }) {
     if (!n.quote || !n.correction || !n.explanation) return toast('Yazılan, doğru biçim ve açıklama zorunludur.');
     if (!n.impact) {
       const q = qById.get(n.questionId);
-      n.impact = q?.type === 'writing' ? { kind: 'rubric', criterion: CODES[n.code]?.criterion || 'GRA' } : { kind: 'points', points: 0 };
+      n.impact = q?.type === 'writing' ? { kind: 'rubric', criterion: CODES[n.code]?.criterion || 'GRA' }
+        : q?.type === 'open' ? (n.code === 'Key' ? { kind: 'content' } : { kind: 'language', weight: Number(exam.langWeight ?? 30) }) : { kind: 'points', points: 0 };
     }
     if (isNew) { n.id = `t${uid().slice(0, 6)}`; n.ruleId = n.ruleId || `ogretmen-${n.id}`; paper.errors.push(n); }
     else paper.errors = paper.errors.map(x => (x.id === e.id ? n : x));
@@ -275,6 +276,29 @@ export async function renderReview(exam, paperId, { mount, app }) {
     });
     const row = h('div', h('div.qscore', h('b', `${q.no}.`), h('div', h('div.small', QUESTION_TYPES[q.type].tr, sc.needsReview ? h('span.chip.c-gray', { style: { marginLeft: '6px' } }, 'kontrol') : null), h('div.small.muted', sc.reason || ''), sc.reviewReason ? h('div.small', { style: { color: 'var(--ink-gray)' } }, sc.reviewReason) : null),
       h('div.row', { style: { gap: '4px', flexWrap: 'nowrap' } }, inp, h('span.small.muted', `/${fmt(sc.max)}`))));
+    if (q.type === 'open' && sc.open) {
+      const redo = async (kind, before, after) => {
+        const r = scoreOpen(q, { points: sc.open.points, language: sc.open.language }, exam.langWeight ?? 30);
+        Object.assign(sc, { earned: r.earned, open: r.open, auto: false, needsReview: false, reviewReason: undefined, reason: `${r.reason} · Öğretmen düzenledi` });
+        await logEdit(kind, before, after);
+        await persist('Puan yeniden hesaplandı.');
+      };
+      row.append(h('div', { style: { padding: '4px 0 10px 44px' } },
+        h('div.small.muted', { style: { margin: '2px 0 6px' } }, q.text),
+        sc.open.points.map(pt => {
+          const sel = h('select', { 'aria-label': `Soru ${q.no} nokta ${pt.index + 1}`, style: { maxWidth: '150px' } }, Object.entries(VERDICTS).map(([k, v]) => h('option', { value: k, selected: k === pt.verdict }, v.tr)));
+          sel.addEventListener('change', () => { const before = { questionId: q.id, point: pt.text, verdict: pt.verdict }; pt.verdict = sel.value; redo('point.edit', before, { questionId: q.id, point: pt.text, verdict: pt.verdict }); });
+          return h('div.band', { style: { gridTemplateColumns: '1fr 150px' } },
+            h('div', h('div.small', h('b', `${pt.index + 1}. `), pt.text), h('div.small.muted', pt.justification || '—')), sel);
+        }),
+        sc.open.langWeight > 0 ? (() => {
+          const L = sc.open.language;
+          const sel = h('select', { 'aria-label': `Soru ${q.no} dil bandı`, style: { maxWidth: '150px' } }, LANG_BANDS.map(b => h('option', { value: b.band, selected: b.band === L.band, title: b.tr }, `${b.band}/4 · ${b.short}`)));
+          sel.addEventListener('change', () => { const before = { questionId: q.id, criterion: 'DIL', band: L.band }; L.band = Number(sel.value); redo('band.edit', before, { questionId: q.id, criterion: 'DIL', band: L.band }); });
+          return h('div.band', { style: { gridTemplateColumns: '1fr 150px' } },
+            h('div', h('div.small', h('b', `Dil doğruluğu (%${sc.open.langWeight})`)), h('div.small.muted', L.justification || '—')), sel);
+        })() : h('div.small.muted', 'Dil payı %0: dil hataları işaretlenir, puan kırmaz.')));
+    }
     if (q.type === 'writing' && sc.rubric?.length) {
       row.append(h('div', { style: { padding: '4px 0 10px 44px' } }, sc.rubric.map(b => {
         const sel = h('select', { 'aria-label': `${b.criterion} bandı` }, BANDS.map(x => h('option', { value: x.band, selected: x.band === b.band, title: x.tr }, String(x.band))));
@@ -298,7 +322,7 @@ export async function renderReview(exam, paperId, { mount, app }) {
     const list = paper.errors || [];
     return h('div.grid',
       h('div.row', h('span.muted.small', list.length ? `${list.length} hata · ${list.filter(e => e.certain === false).length} öğretmen kontrolü` : 'Hata bulunmadı.'), h('span.spacer'),
-        h('button.btn.sm', { onclick: () => editError({ questionId: exam.questions.find(q => q.type === 'writing')?.id || exam.questions[0].id, severity: 'bozmuyor', code: 'Gr', certain: true }, true) }, '+ Hata ekle')),
+        h('button.btn.sm', { onclick: () => editError({ questionId: exam.questions.find(q => isTextType(q.type))?.id || exam.questions[0].id, severity: 'bozmuyor', code: 'Gr', certain: true }, true) }, '+ Hata ekle')),
       list.map(e => card('error', e)));
   }
   function suggestionsTab() {

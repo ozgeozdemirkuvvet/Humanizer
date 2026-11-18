@@ -2,7 +2,7 @@
 // puanlar, numaralı hatalar, kurallar, öneriler, okuma uyarıları, geri bildirim ve toplam.
 // Saf fonksiyon: aynı girdiye her zaman aynı çıktı (tutarlılık + test edilebilirlik).
 
-import { scoreClosed, scoreGap, scoreWriting, totals, countWords } from './scoring.js';
+import { scoreClosed, scoreGap, scoreWriting, scoreOpen, totals, countWords } from './scoring.js';
 import { anchorError, numberErrors, missingFields, markUncertain, lineLayout, toPageBox } from './errors.js';
 import { CODES, QUESTION_TYPES } from './codes.js';
 
@@ -53,6 +53,7 @@ export function assemble({ exam, omr = [], regions = [], answers = [], evaluatio
   const readingFlags = [];
   const rules = [...(evaluation?.rules || [])];
   const note = qid => evaluation?.answerNotes?.find(n => n.questionId === qid);
+  const langWeight = Number(exam.langWeight ?? 30);
   const merged = mergeRegions(regions);
   const regionOf = qid => merged.find(r => r.questionId === qid);
 
@@ -76,32 +77,28 @@ export function assemble({ exam, omr = [], regions = [], answers = [], evaluatio
       if (reg && read.confidence < REVIEW_BELOW && match.kind !== 'okunamadi') readingFlags.push({ questionId: q.id, line: null, text: read.text, confidence: read.confidence, box });
       continue;
     }
-    if (q.type === 'writing') {
+    if (q.type === 'writing' || q.type === 'open') {
+      const isOpen = q.type === 'open';
       const reg = regionOf(q.id);
-      const ev = evaluation?.writing?.find(w => w.questionId === q.id);
+      const ev = (isOpen ? evaluation?.open : evaluation?.writing)?.find(w => w.questionId === q.id);
       const text = regionText(reg);
       const words = countWords(text);
+      const label = isOpen ? 'Cevap' : 'Writing alanı';
       if (!reg || !words) {
         scores.push({ questionId: q.id, max: Number(q.points) || 0, earned: 0, auto: true, needsReview: !reg,
-          reason: reg ? 'Writing alanı boş' : 'Writing alanı okunamadı', rubric: [] });
+          reason: reg ? `${label} boş` : `${label} okunamadı`, rubric: [] });
         continue;
       }
-      if (!ev) {
-        scores.push({ questionId: q.id, max: Number(q.points) || 0, earned: 0, auto: false, needsReview: true, reason: 'Değerlendirme bekleniyor', rubric: [] });
-      } else {
-        scores.push(scoreWriting(q, ev.rubric, { words }));
-      }
+      if (!ev) scores.push({ questionId: q.id, max: Number(q.points) || 0, earned: 0, auto: false, needsReview: true, reason: 'Değerlendirme bekleniyor', rubric: [] });
+      else scores.push(isOpen ? scoreOpen(q, ev, langWeight) : scoreWriting(q, ev.rubric, { words }));
       const bands = lineBands(q.id);
       for (const e of ev?.errors || []) {
-        const crit = e.criterion || CODES[e.code]?.criterion || 'GRA';
-        raw.push(anchorError({
-          ...e, questionId: q.id, source: 'ai',
-          certain: e.certain !== false,
-          impact: { kind: 'rubric', criterion: crit }
-        }, reg, bands));
+        const impact = !isOpen ? { kind: 'rubric', criterion: e.criterion || CODES[e.code]?.criterion || 'GRA' }
+          : e.code === 'Key' ? { kind: 'content' } : { kind: 'language', weight: langWeight };
+        raw.push(anchorError({ ...e, questionId: q.id, source: 'ai', certain: e.certain !== false, impact }, reg, bands));
       }
-      for (const s of ev?.suggestions || []) {
-        const a = anchorError({ ...s, questionId: q.id, kind: 'suggestion' }, reg, bands);
+      for (const sg of ev?.suggestions || []) {
+        const a = anchorError({ ...sg, questionId: q.id, kind: 'suggestion' }, reg, bands);
         suggestions.push({ ...a, kind: 'suggestion' });
       }
       for (const l of reg.lines) l.words.forEach((w, wi) => {
