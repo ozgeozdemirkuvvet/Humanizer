@@ -5,6 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Doğal Kalem</title>
 <meta name="description" content="Yapay zekâ izlerini analiz eden ve metni kişisel üsluba göre yeniden yazan tek sayfalık araç.">
+<meta name="theme-color" content="#2f6b4f">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Doğal Kalem">
+<meta property="og:description" content="Yapay zekâ izlerini bulur, metni sizin sesinizle yeniden yazar. Türkçe ve İngilizce.">
+<meta property="og:image" content="https://ozgeozdemirkuvvet.github.io/humanizer/docs/screenshots/social.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f6b4f'/%3E%3Cpath d='M20 46 L40 16 L48 22 L28 50 Z' fill='%23fff'/%3E%3Cpath d='M20 46 L18 54 L26 49 Z' fill='%23f6d77a'/%3E%3C/svg%3E">
 <!--
 ================================================================================
   DOĞAL KALEM — tek dosyalık web uygulaması
@@ -910,7 +917,9 @@ function renderAnalysis(text, res) {
 
 /** Metin temizliği. Dönüş: { text, changes } */
 function cleanText(text, o) {
-  let n = 0; const rep = (re, to) => { text = text.replace(re, (...a) => { n++; return typeof to === 'function' ? to(...a) : to; }); };
+  let n = 0;
+  // Geri çağırma kullanıldığı için "$1" gibi grup başvuruları elle açılır
+  const rep = (re, to) => { text = text.replace(re, (...a) => { n++; return typeof to === 'function' ? to(...a) : to.replace(/\$(\d)/g, (_, d) => a[+d] ?? ''); }); };
   if (o.invis) rep(/[\u200B\u200C\u200D\uFEFF\u2060\u00AD\u180E]/g, '');
   if (o.nbsp) rep(/[\u00A0\u202F\u2007]/g, ' ');
   if (o.md) {
