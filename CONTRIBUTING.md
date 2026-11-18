@@ -1,8 +1,16 @@
-# Katkı rehberi
+# Geri bildirim
 
-Katkılarınız için teşekkürler!
+Doğal Kalem'i kullandığınız ve fikirlerinizi paylaştığınız için teşekkürler!
 
-## Geliştirme ortamı
+Bu proje **tüm hakları saklı** bir projedir (bkz. [LICENSE](LICENSE)). Bu yüzden dışarıdan kod katkısı (pull request) kabul edilmez. Ancak geri bildirimleriniz çok değerli:
+
+- **Hata bildirimi:** [Issues](../../issues/new/choose) → *Hata bildirimi*
+- **Özellik ya da yeni klişe önerisi:** [Issues](../../issues/new/choose) → *Özellik önerisi*
+- **Güvenlik açığı:** Herkese açık issue açmayın; [SECURITY.md](SECURITY.md) içindeki yolu izleyin.
+
+Lütfen bildirimlerinizde API anahtarınızı ya da kişisel metinlerinizi paylaşmayın.
+
+## Proje sahibi için geliştirme notları
 
 ```bash
 npm install
@@ -11,17 +19,7 @@ npm run check      # lint + tüm testler
 npm start          # http://localhost:8080
 ```
 
-## İlkeler
-
-- **Tek dosya kuralı:** Uygulama `index.html` içinde kalır. Yeni bir çalışma zamanı bağımlılığı gerekiyorsa, sabit sürümle ve yalnızca kullanıldığı anda yüklenmelidir.
-- **Analiz yerel kalır:** Analiz modülü ağ isteği yapmaz.
-- **Türkçe öncelikli:** Yeni ifade kalıplarında `phraseRe()` kullanın (İ/ı ve ek desteği için).
-- **Klişe listesine ekleme:** `CLICHES` içine `{ p: 'ifade~', s: 'doğal öneri' }` ekleyin. `~`, Türkçe ekleri kabul eder. Ardından `tests/app.test.cjs` içine bir örnek ekleyin.
-- **Erişilebilirlik:** Her arayüz değişikliğinden sonra `npm test` axe-core denetimini de çalıştırır; WCAG 2.1 AA ihlali bırakmayın.
-- **İki dil:** Arayüz metinleri hem `I18N.en`/`DYN.en` hem de Türkçe karşılıklarıyla eklenir.
-
-## Commit ve PR
-
-- Küçük, tek amaçlı commit'ler tercih edilir.
-- PR açmadan önce `npm run check` yeşil olmalıdır.
-- Arayüz değişikliklerinde PR açıklamasına ekran görüntüsü ekleyin.
+- `main` dalı korumalıdır: değişiklikler ayrı bir dalda yapılır ve CI yeşil olduktan sonra pull request ile birleştirilir.
+- Uygulama `index.html` içinde kalır. Yeni bir çalışma zamanı bağımlılığı gerekiyorsa sabit sürümle ve yalnızca kullanıldığı anda yüklenir.
+- Analiz modülü ağ isteği yapmaz. Yeni ifade kalıplarında `phraseRe()` kullanılır (İ/ı ve ek desteği için).
+- Arayüz metinleri hem Türkçe hem İngilizce eklenir; erişilebilirlik testi (axe-core, WCAG 2.1 AA) yeşil kalmalıdır.
