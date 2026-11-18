@@ -76,7 +76,9 @@ Tüm kimlikler `crypto.randomUUID()` ile üretilir. Koordinatlar kanonik sayfa p
   "className": "9-A",
   "cefr": "A2",                       // A1 | A2 | B1 | B2
   "explainLang": "tr",                // açıklama ve geri bildirim dili: "tr" | "en"
-  "langWeight": 30,                   // açık uçlu sorularda dil doğruluğunun payı (%)
+  "langWeight": 0,                    // açık uçlu sorularda dil doğruluğunun payı (%); okuma sorularında genelde 0
+  "readingText": "…",                 // isteğe bağlı okuma metni (yalnızca değerlendirmede kullanılır)
+  "markingNotes": "…",                // öğretmenin puanlama notları (istemde varsayılanların önüne geçer)
   "spelling": "esnek",                // "katı" | "esnek"
   "sheetMode": "kirmizikalem",        // "kirmizikalem" | "serbest"
   "redactTop": 0.15,                  // serbest kağıtta karartılacak üst bant oranı
@@ -85,7 +87,7 @@ Tüm kimlikler `crypto.randomUUID()` ile üretilir. Koordinatlar kanonik sayfa p
       "key": ["B"], "text": "She ___ to school yesterday.", "outcome": "E9.1.G1", "note": "" },
     { "id": "q2", "no": 2, "type": "tf", "points": 2, "key": ["D"] },
     { "id": "q3", "no": 3, "type": "match", "points": 2, "options": 5, "key": ["C"] },
-    { "id": "q4", "no": 4, "type": "gap", "points": 4,
+    { "id": "q4", "no": 4, "type": "gap", "points": 4, "prefix": "w",   // kağıtta verilen ilk harf(ler)
       "key": ["went"], "alternatives": ["had gone"], "text": "Yesterday I ___ (go) to the cinema." },
     { "id": "q6", "no": 6, "type": "open", "points": 10, "lines": 3,
       "text": "Why did Tom go to London? Answer according to the text.",

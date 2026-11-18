@@ -52,6 +52,22 @@ Dil hataları kağıt üzerinde writing'deki gibi tek tek işaretlenir (kod, do�
 
 > Uygulama ES modülleri ve Web Worker kullanır. Bu yüzden `index.html` dosyasına çift tıklayarak (`file://`) açılmaz; bir web adresinden açılmalıdır (GitHub Pages ya da `npm start`).
 
+## Gerçek kağıtlarla kalibrasyon
+
+Bir öğretmenin kırmızı kalemle puanladığı 5 gerçek okuma sınavı kağıdıyla (sayfa 2: Task 4–6) şu ölçüldü ve düzeltildi. Fotoğraflar depoya konmadı. Yalnızca okunan cevaplar ve verilen puanlar, kimliksiz olarak [`tests/fixtures/okuma-sinavi.mjs`](tests/fixtures/okuma-sinavi.mjs) dosyasında.
+
+| Ne ölçüldü | Sonuç |
+|---|---|
+| İlk harfi verilen boşluklar (Task 4, cihazda puanlanır) | **30/30 madde öğretmenle aynı.** Öğrenciler yalnızca devamını yazdığı için ("urriculum", "chool schedule") "verilen ilk harf" alanı eklendi. |
+| Açık uçlu sorularda öğretmenin puanlama ölçeği | Kararların hepsi tam, yarım ya da sıfır puan. Dilbilgisi hataları puan kırmamış. Bu yüzden öntanımlı dil payı **%0** yapıldı. |
+| Gerçek fotoğraflarda kırpma | **Hata bulundu ve düzeltildi.** Açık renkli masada eski kırpma sayfanın altını kesiyordu ve son sorular kayboluyordu. Artık yalnızca belirgin biçimde koyu kenarlar kırpılıyor. |
+| İkinci sayfada karartma | **Hata bulundu ve düzeltildi.** Ad olmayan 2. sayfada üst bant karartılınca sorular siliniyordu. Artık yalnızca her öğrencinin ilk sayfası karartılıyor. |
+| Öğretmene sorulacak | E kağıdında Task 4 toplamı 4 yazılmış, ama maddelere göre 3 doğru var. C kağıdında Task 6'daki yarım puanın 2. soruya mı 3. soruya mı verildiği net değil. |
+
+**Kalibrasyon nasıl işliyor?** Onayladığınız her kağıt, aynı sınavın sonraki kağıtları için puanlama örneği olur. Claude'a her açık uçlu soru için farklı puan düzeylerinden en fazla 4 örnek gösterilir (ör. "Melatonin." → 0,5; "because of their body clock" → 0). Sınav tanımına **okuma metnini** ve **puanlama notlarınızı** da ekleyebilirsiniz.
+
+> Claude'un bu 5 kağıda kendi başına verdiği puanlar henüz ölçülmedi, çünkü geliştirme ortamında API anahtarı yok. Uygulamada anahtarınızla aynı kağıtları yükleyip onaylı puanlarla karşılaştırmak birkaç dakika sürer.
+
 ## Gizlilik (KVKK)
 
 - **Sunucu yok.** Tüm veriler (sınavlar, kağıtlar, görüntüler, düzenlemeler) yalnızca öğretmenin tarayıcısında, IndexedDB'de saklanır.

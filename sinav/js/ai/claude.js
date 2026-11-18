@@ -103,9 +103,9 @@ export async function readCrops(ctx, exam, crops) {
 /**
  * Aşama B: yalnızca metinle değerlendirme (rubrik, hatalar, kurallar, öneriler, geri bildirim).
  */
-export async function evaluate(ctx, exam, regions, wrong, prefs) {
+export async function evaluate(ctx, exam, regions, wrong, prefs, examples = []) {
   const system = evalSystem(exam);
-  const text = evalUserText(exam, regions, wrong, prefs);
+  const text = evalUserText(exam, regions, wrong, prefs, examples);
   const res = await callStructured({
     ...ctx, effort: ctx.evalEffort || 'high', system, content: [{ type: 'text', text }], schema: EVAL_SCHEMA,
     cacheKeyParts: ['eval-v2', ctx.model, system, text]

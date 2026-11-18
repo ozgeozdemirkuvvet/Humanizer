@@ -421,6 +421,7 @@ test('tamamı açık uçlu sınav: soru kağıda basılır, içerik noktaları +
   await page.goto(base + '#/sinav/yeni');
   await page.getByLabel('Sınav adı').fill('11. Sınıf Okuma Yazılısı');
   await page.getByLabel('Şube').fill('9-A');
+  await page.getByLabel('Açık uçlu sorularda dil payı').selectOption('30');
   await page.getByRole('button', { name: '⚡ Hızlı ekle' }).click();
   await page.getByLabel('Soru sayısı').fill('3');
   await page.getByRole('dialog').getByRole('button', { name: 'Ekle', exact: true }).click();

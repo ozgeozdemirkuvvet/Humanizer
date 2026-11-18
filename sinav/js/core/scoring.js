@@ -94,23 +94,29 @@ export function scoreGap(q, r, spelling = 'esnek') {
     score.reason = `Boş bırakılmış · Anahtar: ${keyTxt}`;
     return { score, match: { kind: 'bos' } };
   }
-  if (accepted.includes(ans)) {
+  // İlk harf(ler)i kağıtta verilmiş boşluk ("c______"): öğrenci çoğu zaman yalnızca devamını yazar
+  // ("urriculum"). Hem yazılanı hem de ipucu + yazılanı dener.
+  const pre = normalizeAnswer(q.prefix || '');
+  const cands = pre && !ans.startsWith(pre) ? [ans, pre + ans] : [ans];
+  const shown = c => (c === ans ? `“${raw.trim()}”` : `“${raw.trim()}” (verilen “${q.prefix}” ile: ${c})`);
+  const exact = cands.find(c => accepted.includes(c));
+  if (exact) {
     score.earned = max;
-    score.reason = `“${raw.trim()}” kabul edildi` + (normalizeAnswer(q.key?.[0]) === ans ? '' : ' (alternatif cevap)');
+    score.reason = `${shown(exact)} kabul edildi` + (normalizeAnswer(q.key?.[0]) === exact ? '' : ' (alternatif cevap)');
     if ((r.confidence ?? 1) < READ_REVIEW) { score.needsReview = true; score.reason += ' · Okuma güveni düşük'; }
-    return { score, match: { kind: 'tam', target: ans } };
+    return { score, match: { kind: 'tam', target: exact } };
   }
   if (spelling === 'esnek') {
     let best = null;
-    for (const a of accepted) {
-      const d = editDistance(ans, a);
-      if (d <= spellingTolerance(a.length) && (!best || d < best.distance)) best = { target: a, distance: d };
+    for (const c of cands) for (const a of accepted) {
+      const d = editDistance(c, a);
+      if (d <= spellingTolerance(a.length) && (!best || d < best.distance)) best = { target: a, distance: d, written: c };
     }
     if (best) {
       score.earned = max;
-      score.reason = `“${raw.trim()}” yazım farkıyla kabul edildi (doğrusu: ${best.target}; esnek mod)`;
+      score.reason = `${shown(best.written)} yazım farkıyla kabul edildi (doğrusu: ${best.target}; esnek mod)`;
       if ((r.confidence ?? 1) < READ_REVIEW) { score.needsReview = true; score.reason += ' · Okuma güveni düşük'; }
-      return { score, match: { kind: 'yazim', ...best } };
+      return { score, match: { kind: 'yazim', target: best.target, distance: best.distance } };
     }
   }
   score.reason = `“${raw.trim()}” anahtarla uyuşmuyor · Anahtar: ${keyTxt}`;
@@ -161,7 +167,7 @@ export function contentPoints(q) {
  * @param {{points:{index:number, verdict:string, justification:string}[], language:{band:number, justification:string}}} ev
  * @param {number} langWeight 0–100 (sınav ayarı)
  */
-export function scoreOpen(q, ev, langWeight = 30) {
+export function scoreOpen(q, ev, langWeight = 0) {
   const max = Number(q.points) || 0;
   const cps = contentPoints(q);
   const w = Math.max(0, Math.min(100, Number(langWeight))) / 100;

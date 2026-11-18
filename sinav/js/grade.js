@@ -18,7 +18,7 @@ import { QUESTION_TYPES, isTextType } from './core/codes.js';
  * @param {(img)=>Promise<string>} o.encode RGBA → JPEG base64
  * @param {(stage:string)=>void} [o.onStage]
  */
-export async function gradePaper({ exam, layout, pages, ai, prefs = [], encode, onStage = () => {} }) {
+export async function gradePaper({ exam, layout, pages, ai, prefs = [], examples = [], encode, onStage = () => {} }) {
   const lang = exam.explainLang || 'tr';
   const omr = pages.flatMap(p => p.omr || []);
   const free = pages.some(p => p.mode === 'serbest');
@@ -57,7 +57,7 @@ export async function gradePaper({ exam, layout, pages, ai, prefs = [], encode, 
   const wrong = wrongAnswers(exam, local, omr, regions, answers);
   if (ai && (hasWriting || wrong.length)) {
     onStage('degerlendirme');
-    evaluation = await evaluate(ai, exam, mergeRegions(regions), wrong, prefs);
+    evaluation = await evaluate(ai, exam, mergeRegions(regions), wrong, prefs, examples);
     evalModel = evaluation.model;
   }
   const result = evaluation ? assemble({ exam, omr, regions, answers, evaluation, answerBox, lineBands, lang }) : local;

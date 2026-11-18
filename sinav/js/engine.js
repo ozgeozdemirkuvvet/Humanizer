@@ -7,7 +7,7 @@ import { layoutSheet } from './vision/sheet.js';
 import { processPage } from './vision/pipeline.js';
 import { gradePaper } from './grade.js';
 import { makeClient, apiErrorMessage, loadSDK } from './ai/claude.js';
-import { teacherPreferences } from './ai/prompts.js';
+import { teacherPreferences, calibrationExamples } from './ai/prompts.js';
 import { pseudonym } from './core/csv.js';
 import { uid } from './core/exam.js';
 
@@ -30,15 +30,15 @@ function getWorker() {
   } catch { worker = false; }
   return worker;
 }
-async function runPipeline(rgba, exam, layout) {
+async function runPipeline(rgba, exam, layout, redact = true) {
   const w = getWorker();
   if (w) {
     try {
-      return await new Promise((resolve, reject) => { const id = ++wseq; wpending.set(id, { resolve, reject }); w.postMessage({ id, rgba, exam, layout }); });
+      return await new Promise((resolve, reject) => { const id = ++wseq; wpending.set(id, { resolve, reject }); w.postMessage({ id, rgba, exam, layout, redact }); });
     } catch (e) { if (e.message !== 'worker') throw e; }
   }
   await new Promise(r => setTimeout(r, 0));
-  return processPage(rgba, { exam, layout });
+  return processPage(rgba, { exam, layout, redact });
 }
 
 // ---- Değerlendirme kuyruğu
@@ -70,7 +70,10 @@ export async function ingest(exam, files) {
       stats.pending++; emit('progress', { ...stats });
       try {
         const sourceBlob = await toJpegBlob(pg.rgba, 0.9);
-        const res = await runPipeline(pg.rgba, exam, layout);
+        // Serbest kağıtta öğrencinin kaçıncı sayfası? Yalnızca ilk sayfanın üst bandı karartılır.
+        const pps = Math.max(1, exam.pagesPerStudent || 1);
+        const firstOfStudent = !(openFree && openFree.pages.length < pps);
+        const res = await runPipeline(pg.rgba, exam, layout, firstOfStudent);
         if (!res.ok) {
           const p = await savePaper(exam, null, { sourceBlob, res, name: pg.name, roster });
           p.status = 'hata'; p.error = `${pg.name}: ${res.reason}. Kağıdın tamamı görünecek şekilde yeniden çekin ya da sınav ayarlarından “Kendi kağıdım” seçeneğini kullanın.`;
@@ -143,9 +146,9 @@ async function gradeJob(exam, layout, paperId) {
     let pages = pageCache.get(paperId);
     if (!pages || pages.length !== paper.pages.length) {
       pages = [];
-      for (const pg of paper.pages) {
+      for (const [i, pg] of paper.pages.entries()) {
         const src = await db.get('images', pg.sourceId);
-        pages.push(await runPipeline(await blobToRGBA(src.blob), exam, layout));
+        pages.push(await runPipeline(await blobToRGBA(src.blob), exam, layout, i === 0));
       }
       pageCache.set(paperId, pages);
     }
@@ -155,7 +158,8 @@ async function gradeJob(exam, layout, paperId) {
       ai = { client, model: settingsRef.model, cache: aiCache, evalEffort: settingsRef.evalEffort };
     }
     const prefs = teacherPreferences(await db.byExam('edits', exam.id));
-    const result = await gradePaper({ exam, layout, pages, ai, prefs, encode: img => toJpegBase64(img, 0.85), onStage: st => emit('stage', { paperId, stage: st }) });
+    const examples = calibrationExamples(exam, (await db.byExam('papers', exam.id)).filter(p => p.status === 'onaylandi' && p.id !== paperId));
+    const result = await gradePaper({ exam, layout, pages, ai, prefs, examples, encode: img => toJpegBase64(img, 0.85), onStage: st => emit('stage', { paperId, stage: st }) });
     paper = await db.get('papers', paperId);
     Object.assign(paper, result, { status: 'degerlendirildi', aiUsed: !!ai, gradedAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
     await db.put('papers', paper);
@@ -198,7 +202,8 @@ export async function reevaluate(exam, paper) {
   if (settingsRef?.apiKey) {
     const { client } = await makeClient(settingsRef.apiKey);
     const prefs = teacherPreferences(await db.byExam('edits', exam.id));
-    evaluation = await evaluate({ client, model: settingsRef.model, cache: aiCache, evalEffort: settingsRef.evalEffort }, exam, mergeRegions(regions), wrongAnswers(exam, local, omr, regions, answers), prefs);
+    const examples = calibrationExamples(exam, (await db.byExam('papers', exam.id)).filter(p => p.status === 'onaylandi' && p.id !== paper.id));
+    evaluation = await evaluate({ client, model: settingsRef.model, cache: aiCache, evalEffort: settingsRef.evalEffort }, exam, mergeRegions(regions), wrongAnswers(exam, local, omr, regions, answers), prefs, examples);
   }
   const result = evaluation ? assemble({ exam, omr, regions, answers, evaluation, answerBox, lineBands, lang: exam.explainLang }) : local;
   return { ...result, evaluation: evaluation || paper.evaluation || null, feedback: result.feedback || paper.feedback };

@@ -212,7 +212,7 @@ export async function renderReview(exam, paperId, { mount, app }) {
     if (!n.impact) {
       const q = qById.get(n.questionId);
       n.impact = q?.type === 'writing' ? { kind: 'rubric', criterion: CODES[n.code]?.criterion || 'GRA' }
-        : q?.type === 'open' ? (n.code === 'Key' ? { kind: 'content' } : { kind: 'language', weight: Number(exam.langWeight ?? 30) }) : { kind: 'points', points: 0 };
+        : q?.type === 'open' ? (n.code === 'Key' ? { kind: 'content' } : { kind: 'language', weight: Number(exam.langWeight ?? 0) }) : { kind: 'points', points: 0 };
     }
     if (isNew) { n.id = `t${uid().slice(0, 6)}`; n.ruleId = n.ruleId || `ogretmen-${n.id}`; paper.errors.push(n); }
     else paper.errors = paper.errors.map(x => (x.id === e.id ? n : x));
@@ -278,7 +278,7 @@ export async function renderReview(exam, paperId, { mount, app }) {
       h('div.row', { style: { gap: '4px', flexWrap: 'nowrap' } }, inp, h('span.small.muted', `/${fmt(sc.max)}`))));
     if (q.type === 'open' && sc.open) {
       const redo = async (kind, before, after) => {
-        const r = scoreOpen(q, { points: sc.open.points, language: sc.open.language }, exam.langWeight ?? 30);
+        const r = scoreOpen(q, { points: sc.open.points, language: sc.open.language }, exam.langWeight ?? 0);
         Object.assign(sc, { earned: r.earned, open: r.open, auto: false, needsReview: false, reviewReason: undefined, reason: `${r.reason} · Öğretmen düzenledi` });
         await logEdit(kind, before, after);
         await persist('Puan yeniden hesaplandı.');

@@ -81,17 +81,26 @@ RULE EXPLANATIONS (rules[])
 - rule_id: a short stable kebab-case id for the underlying rule (e.g. "past-simple-time-expression", "third-person-s", "article-a-an"). Use the same id for the same rule across papers.
 
 HOW TO MARK OPEN-ENDED ANSWERS (open[])
-Each open question comes with the teacher's model answer and numbered content points. Language accuracy counts for ${Number(exam.langWeight ?? 30)}% of the question score and content for the rest.
+Each open question comes with the teacher's model answer and numbered content points. Language accuracy counts for ${Number(exam.langWeight ?? 0)}% of the question score and content for the rest.
 1. points[]: one entry per content point (index as given). verdict: "karsilandi" (the answer clearly expresses it, in any wording, synonyms and paraphrases count), "kismen" (partly, vague or incomplete) or "eksik" (missing or wrong). justification: one short sentence citing what the student wrote. Judge meaning, not form: a correct idea with grammar mistakes is still "karsilandi"; language is judged separately. Do not require the model answer's exact words. If the question asks for information from a text, accept any answer that is correct for that question.
 2. language: band 0–4 (4 = accurate for ${exam.cefr}, at most very minor slips; 3 = a few errors, meaning clear; 2 = noticeable errors, meaning mostly clear; 1 = many errors, meaning strained; 0 = not understandable). Calibrate to ${exam.cefr}. justification: one sentence naming the main errors or strengths.
 3. errors[]: mark language errors exactly as for writing (same fields, same rules). If a part of the answer is factually wrong or answers a different question, mark that span with code "Key" (content), severity "bozuyor", and give the correct content as correction.
-4. If the answer is a copied sentence from the question or unrelated, all points are "eksik".
-5. suggestions[]: as for writing; never reduce the score.
+4. If the answer only repeats the question or is unrelated, all points are "eksik". An answer that gives information belonging to a different question is "eksik" for this one.
+5. Unless the teacher's notes say otherwise: copying the relevant sentence from the reading text is acceptable ("karsilandi") even if the question says "in your own words"; naming only the key term without the explanation the question asks for (e.g. a one-word answer) is "kismen"; a vague answer that does not state the specific fact the question targets is "eksik"; for "what two ..." questions, any two correct items from the text are acceptable.
+6. suggestions[]: as for writing; never reduce the score.
 
 WRONG CLOSED-ENDED / SHORT ANSWERS (answer_notes[])
 - For each wrong answer listed in the input, explain briefly why the key is correct and the student's answer is not, with a matching code (use "Key" when no language error code fits), a rule_id, a short example sentence and severity.
 
-FEEDBACK
+${exam.readingText ? `READING TEXT (the questions are based on this text; judge content against it)
+<reading_text>
+${exam.readingText}
+</reading_text>
+
+` : ''}${exam.markingNotes ? `THE TEACHER'S MARKING NOTES (these override the defaults above)
+${exam.markingNotes}
+
+` : ''}FEEDBACK
 - strength: exactly one specific strength.
 - improvements: at most 3 priority areas, most important first.
 - study_tip: one concrete, doable study suggestion.
@@ -105,8 +114,11 @@ FEEDBACK
  * @param {object[]} wrong yanlış/boş kapalı uçlu ve kısa cevaplar [{q, given}]
  * @param {string[]} prefs öğretmen tercihleri (düzenleme günlüğünden)
  */
-export function evalUserText(exam, regions, wrong, prefs = []) {
+export function evalUserText(exam, regions, wrong, prefs = [], examples = []) {
   const parts = [];
+  if (examples.length) {
+    parts.push(`<teacher_graded_examples>\nAnswers from other students on this exam, graded and approved by the teacher. Grade consistently with these.\n${examples.map(x => `- Q${x.no} (question_id "${x.questionId}"): "${x.answer}" → ${x.earned}/${x.max}${x.verdicts ? ` [${x.verdicts}]` : ''}`).join('\n')}\n</teacher_graded_examples>`);
+  }
   if (prefs.length) parts.push(`<teacher_preferences>\nThe teacher corrected earlier markings on this exam. Follow these decisions:\n${prefs.map(p => `- ${p}`).join('\n')}\n</teacher_preferences>`);
   const textOf = q => (regions.find(r => r.questionId === q.id)?.lines || []).map(l => `${l.n}: ${lineLayout(l.words).text}`).join('\n');
   for (const q of exam.questions.filter(x => x.type === 'open')) {
@@ -132,7 +144,7 @@ ${lines || '(empty)'}
 </writing>`);
   }
   if (wrong.length) {
-    parts.push(`<wrong_answers>\n${wrong.map(w => `- question_id "${w.q.id}" (Q${w.q.no}, ${w.q.type})${w.q.text ? ` "${w.q.text}"` : ''}: student answered "${w.given}", key "${(w.q.key || []).join(' / ')}"${w.q.alternatives?.length ? ` (also accepted: ${w.q.alternatives.join(', ')})` : ''}`).join('\n')}\n</wrong_answers>`);
+    parts.push(`<wrong_answers>\n${wrong.map(w => `- question_id "${w.q.id}" (Q${w.q.no}, ${w.q.type})${w.q.text ? ` "${w.q.text}"` : ''}: student answered "${w.given}"${w.q.prefix ? ` (first letter(s) "${w.q.prefix}" printed on the paper)` : ''}, key "${(w.q.key || []).join(' / ')}"${w.q.alternatives?.length ? ` (also accepted: ${w.q.alternatives.join(', ')})` : ''}`).join('\n')}\n</wrong_answers>`);
   }
   parts.push('Mark this paper. Return open[] for every open question above, writing[] for every writing question above, rules[] for every rule_id you use, answer_notes[] for every wrong answer listed, and the feedback.');
   return parts.join('\n\n');
@@ -150,6 +162,32 @@ export function teacherPreferences(edits) {
     else if (e.kind === 'point.edit' && e.before && e.after) s = `For the content point "${e.after.point}", the teacher changed the verdict from "${e.before.verdict}" to "${e.after.verdict}"; judge similar answers the same way.`;
     if (s && !out.includes(s)) out.push(s);
     if (out.length >= 30) break;
+  }
+  return out;
+}
+
+/**
+ * Kalibrasyon: aynı sınavın öğretmence onaylanmış kağıtlarından, her açık uçlu soru için puanları
+ * birbirinden farklı en fazla 4 örnek cevap. Öğretmenin puanlama tarzı böylece sonraki kağıtlara taşınır.
+ */
+export function calibrationExamples(exam, approvedPapers, perQuestion = 4) {
+  const out = [];
+  for (const q of exam.questions.filter(x => x.type === 'open')) {
+    const items = [];
+    for (const p of approvedPapers) {
+      const sc = p.scores?.find(s => s.questionId === q.id);
+      const lines = (p.reading?.regions || []).filter(r => r.questionId === q.id).flatMap(r => r.lines).sort((a, b) => a.n - b.n);
+      const answer = lines.map(l => lineLayout(l.words).text).join(' ').trim().slice(0, 300);
+      if (!sc || !answer) continue;
+      const verdicts = sc.open?.points?.map(pt => `${pt.index}: ${pt.verdict}`).join(', ');
+      items.push({ questionId: q.id, no: q.no, answer, earned: sc.earned, max: sc.max, verdicts });
+    }
+    // Farklı puan düzeylerinden örnek seç (önce her puandan bir tane)
+    const byScore = new Map();
+    for (const it of items) if (!byScore.has(it.earned)) byScore.set(it.earned, it);
+    const picked = [...byScore.values()];
+    for (const it of items) { if (picked.length >= perQuestion) break; if (!picked.includes(it)) picked.push(it); }
+    out.push(...picked.slice(0, perQuestion).sort((a, b) => b.earned - a.earned));
   }
   return out;
 }

@@ -103,9 +103,13 @@ async function renderEditor(exam) {
     field('Şube', bind(ex, 'className', h('input', { value: ex.className, list: 'roster-names', placeholder: 'ör. 9-A' })), 'Sınıf listesindeki adla eşleşirse öğrenci adları numaradan bulunur.'),
     field('Hedef CEFR seviyesi', sel(ex, 'cefr', CEFR_LEVELS.map(l => [l, l])), 'Dil doğruluğu ve writing beklentisi bu seviyeye göre ayarlanır.'),
     field('Açıklama ve geri bildirim dili', sel(ex, 'explainLang', [['tr', 'Türkçe'], ['en', 'İngilizce']])),
-    field('Açık uçlu sorularda dil payı', bind(ex, 'langWeight', h('select', [[0, '%0 — yalnızca içerik (dil hataları işaretlenir, puan kırmaz)'], [20, '%20'], [30, '%30 (önerilen)'], [40, '%40'], [50, '%50']].map(([v, t]) => h('option', { value: v, selected: Number(ex.langWeight ?? 30) === v }, t))), Number), 'Sorunun puanının bu kadarı dil doğruluğuna, kalanı içeriğe ayrılır. İçerik tamamen yanlışsa dil puanı verilmez.'),
+    field('Açık uçlu sorularda dil payı', bind(ex, 'langWeight', h('select', [[0, '%0 — yalnızca içerik (dil hataları işaretlenir, puan kırmaz)'], [20, '%20'], [30, '%30'], [40, '%40'], [50, '%50']].map(([v, t]) => h('option', { value: v, selected: Number(ex.langWeight ?? 0) === v }, t))), Number), 'Okuma sorularında genellikle %0: yalnızca içerik puanlanır. %0’dan büyükse puanın bu kadarı dil doğruluğuna ayrılır; içerik tamamen yanlışsa dil puanı verilmez.'),
     field('Yazım hatası toleransı', sel(ex, 'spelling', [['esnek', 'Esnek (küçük yazım farkı kabul)'], ['katı', 'Katı (birebir)']]), 'Boşluk doldurma ve kısa cevaplar için.'),
     field('Kağıt türü', sel(ex, 'sheetMode', [['kirmizikalem', 'Kırmızı Kalem cevap kağıdı (önerilen)'], ['serbest', 'Kendi kağıdım (serbest)']]), 'Önerilen kağıtta sorular basılı gelir, okul numarası cihazda okunur ve ad hiçbir yere gönderilmez.'),
+    h('label.f', { style: { gridColumn: '1 / -1' } }, 'Okuma metni (isteğe bağlı)', bind(ex, 'readingText', h('textarea', { rows: 4, placeholder: 'Sorular bir okuma metnine dayanıyorsa metni buraya yapıştırın. Cevapların içeriği bu metne göre değerlendirilir.' }, ex.readingText || '')),
+      h('span.h', 'Yalnızca değerlendirme için kullanılır; cevap kağıdına basılmaz.')),
+    h('label.f', { style: { gridColumn: '1 / -1' } }, 'Puanlama notlarım (isteğe bağlı)', bind(ex, 'markingNotes', h('textarea', { rows: 3, placeholder: 'ör. Metinden aynen alınan cümleler kabul. Yalnızca anahtar kelimeyi yazan (ör. “Melatonin.”) yarım puan alır. Dilbilgisi hatası puan kırmaz.' }, ex.markingNotes || '')),
+      h('span.h', 'Claude her kağıtta bu notlara uyar. Onayladığınız kağıtlar da otomatik olarak puanlama örneği olur.')),
     h('datalist#roster-names', rosters.map(r => h('option', { value: r.id }))));
   const freeOpts = h('div.card.grid', { style: { gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' } },
     field('Karartılacak üst bant (%)', bind(ex, 'redactTop', h('input', { type: 'number', min: 0, max: 50, step: 1, value: Math.round((ex.redactTop ?? 0.15) * 100) }), v => Number(v) / 100), 'Ad ve numaranın yazdığı üst bölüm yapay zekâya gönderilmeden karartılır.'),
@@ -129,6 +133,7 @@ async function renderEditor(exam) {
       fields.append(h('div.f', h('span', { style: { fontWeight: 600, fontSize: '.9rem' } }, 'Cevap anahtarı'), pick, h('span.h.small.muted', 'Birden fazla doğru seçenek seçilebilir.')));
     }
     if (q.type === 'gap') {
+      fields.append(field('Verilen ilk harf(ler)', bind(q, 'prefix', h('input', { value: q.prefix || '', placeholder: 'ör. c', style: { maxWidth: '120px' } })), 'Kağıtta “c______” gibi ipucu varsa. Öğrenci yalnızca devamını yazsa da kabul edilir.'));
       fields.append(field('Doğru cevap', bind(q, 'key', h('input', { value: (q.key || []).join(' | ') }), v => v.split('|').map(x => x.trim()).filter(Boolean))));
       fields.append(field('Kabul edilen alternatifler', bind(q, 'alternatives', h('input', { value: (q.alternatives || []).join(' | '), placeholder: "ör. had gone | 'd gone" }), v => v.split('|').map(x => x.trim()).filter(Boolean)), '"|" ile ayırın.'));
     }

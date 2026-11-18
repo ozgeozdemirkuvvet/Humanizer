@@ -6,7 +6,7 @@ export function newExam(partial = {}) {
   const now = new Date().toISOString();
   return {
     id: partial.id || uid(),
-    name: '', grade: '9', className: '', cefr: 'A2', explainLang: 'tr', langWeight: 30,
+    name: '', grade: '9', className: '', cefr: 'A2', explainLang: 'tr', langWeight: 0, readingText: '', markingNotes: '',
     spelling: 'esnek', sheetMode: 'kirmizikalem', redactTop: 0.15,
     questions: [], createdAt: now, updatedAt: now,
     ...partial
@@ -18,7 +18,7 @@ export function newQuestion(type, no) {
   if (type === 'open') return { ...base, modelAnswer: '', keyPoints: [], lines: 4 };
   if (type === 'mc') return { ...base, options: 4 };
   if (type === 'match') return { ...base, options: 5 };
-  if (type === 'gap') return { ...base, alternatives: [] };
+  if (type === 'gap') return { ...base, alternatives: [], prefix: '' };
   if (type === 'writing') return { ...base, minWords: 60, maxWords: 100, lines: 16, rubric: { TA: 1, CC: 1, LR: 1, GRA: 1 } };
   return base;
 }
@@ -61,7 +61,7 @@ export function validateExam(exam) {
     }
     if ((q.type === 'mc' || q.type === 'gap') && !String(q.text || '').trim()) warnings.push(`${tag}: soru metni boş; yanlış cevaplar için kural açıklaması üretilemez, yalnızca doğru cevap gösterilir.`);
   }
-  const lw = Number(exam.langWeight ?? 30);
+  const lw = Number(exam.langWeight ?? 0);
   if (exam.questions?.some(q => q.type === 'open') && !(lw >= 0 && lw <= 100)) errors.push('Açık uçlu sorularda dil payı 0 ile 100 arasında olmalı.');
   if (total && Math.abs(total - 100) > 1e-9) warnings.push(`Toplam puan ${total}; not 100'e ölçeklenecek.`);
   return { errors, warnings, total };

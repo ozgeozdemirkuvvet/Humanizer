@@ -18,14 +18,14 @@ export const AI_SCALE = 2; // yapay zekâ kırpıntıları 300 dpi (el yazısı 
  * @param {object} o.layout layoutSheet(exam)
  * @returns {object} sayfa sonucu
  */
-export function processPage(rgba, { exam, layout }) {
+export function processPage(rgba, { exam, layout, redact = true }) {
   const g0 = rgbaToGray(rgba);
   if (exam.sheetMode !== 'serbest') {
     const det = detectSheet(g0);
     if (det.ok) return sheetPage(rgba, det, exam, layout);
     if (exam.sheetMode === 'kirmizikalem') return { ok: false, mode: 'kirmizikalem', reason: det.reason };
   }
-  return freePage(rgba, g0, exam);
+  return freePage(rgba, g0, exam, redact);
 }
 
 function sheetPage(rgba, det, exam, layout) {
@@ -56,7 +56,7 @@ function sheetPage(rgba, det, exam, layout) {
   };
 }
 
-function freePage(rgba, g0, exam) {
+function freePage(rgba, g0, exam, doRedact = true) {
   const b = paperBounds(g0);
   let img = crop(rgba, b, 4);
   let g = rgbaToGray(img);
@@ -65,7 +65,8 @@ function freePage(rgba, g0, exam) {
   // Gösterim ve yapay zekâ için genişliği 1240'a ölçekle (yükseklik orantılı)
   const s = PAGE_W / img.w;
   const display = warp(img, [1 / s, 0, 0, 0, 1 / s, 0, 0, 0, 1], { x: 0, y: 0, w: PAGE_W, h: Math.round(img.h * s) }, 1, 4);
-  const redact = Math.round(display.h * Math.max(0, Math.min(0.5, exam.redactTop ?? 0.15)));
+  // Ad yalnızca öğrencinin ilk sayfasında yazılır; sonraki sayfalarda karartma soruları silerdi
+  const redact = doRedact ? Math.round(display.h * Math.max(0, Math.min(0.5, exam.redactTop ?? 0.15))) : 0;
   const ai = { w: display.w, h: display.h, d: new Uint8ClampedArray(display.d) };
   for (let i = 0; i < redact * ai.w * 4; i += 4) { ai.d[i] = 0; ai.d[i + 1] = 0; ai.d[i + 2] = 0; }
   const rect = { x: 0, y: 0, w: display.w, h: display.h };
@@ -74,6 +75,6 @@ function freePage(rgba, g0, exam) {
     number: { no: '', confident: false }, omr: [], redactPx: redact,
     crops: [{ regionId: 'page', questionId: null, kind: 'page', page: null, rect, img: ai }],
     display, width: display.w, height: display.h,
-    warnings: ['Serbest kağıt: öğrenciyi listeden seçin. Ad bölgesi yapay zekâya gönderilmeden karartıldı.']
+    warnings: [redact ? 'Serbest kağıt: öğrenciyi listeden seçin. Ad bölgesi yapay zekâya gönderilmeden karartıldı.' : 'Serbest kağıt: öğrenciyi listeden seçin.']
   };
 }

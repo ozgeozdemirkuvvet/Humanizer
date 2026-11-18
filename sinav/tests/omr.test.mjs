@@ -142,3 +142,18 @@ test('işleme hattı: kırpıntılar yalnızca cevap bölgeleri (ad/numara başl
   console.log(`# işleme hattı (düzeltme + OMR + 300 dpi kırpıntılar): ${ms.toFixed(0)} ms`);
   assert.ok(ms < 3000);
 });
+
+test('serbest kağıt kırpma: açık renkli masada sayfanın altı kesilmez (gerçek fotoğraflarda bulunan hata)', async () => {
+  const { paperBounds } = await import('../js/vision/freeform.js');
+  // 1000×1300 fotoğraf: masa 215 (açık bej), kağıt 240, kağıdın alt %25'i gölgede (200), üzerinde yazı
+  const W = 1000, H = 1300, d = new Uint8ClampedArray(W * H).fill(215);
+  for (let y = 60; y < 1290; y++) for (let x = 80; x < 960; x++) d[y * W + x] = y > 1000 ? 200 : 240;
+  for (let y = 1100; y < 1250; y += 30) for (let x = 120; x < 900; x++) d[y * W + x] = 60; // gölgedeki son cevaplar
+  const b = paperBounds({ w: W, h: H, d });
+  assert.ok(b.y + b.h >= 1250, `alt sınır ${b.y + b.h}: son cevap satırları kesilmemeli`);
+  // Koyu masada ise kenarlar kırpılır
+  const d2 = new Uint8ClampedArray(W * H).fill(60);
+  for (let y = 100; y < 1200; y++) for (let x = 100; x < 900; x++) d2[y * W + x] = 235;
+  const b2 = paperBounds({ w: W, h: H, d: d2 });
+  assert.ok(b2.x > 60 && b2.y > 60 && b2.x + b2.w < 940 && b2.y + b2.h < 1240, JSON.stringify(b2));
+});

@@ -53,7 +53,7 @@ export function assemble({ exam, omr = [], regions = [], answers = [], evaluatio
   const readingFlags = [];
   const rules = [...(evaluation?.rules || [])];
   const note = qid => evaluation?.answerNotes?.find(n => n.questionId === qid);
-  const langWeight = Number(exam.langWeight ?? 30);
+  const langWeight = Number(exam.langWeight ?? 0);
   const merged = mergeRegions(regions);
   const regionOf = qid => merged.find(r => r.questionId === qid);
 
