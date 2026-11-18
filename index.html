@@ -1,0 +1,1414 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Doğal Kalem</title>
+<meta name="description" content="Yapay zekâ izlerini analiz eden ve metni kişisel üsluba göre yeniden yazan tek sayfalık araç.">
+<!--
+================================================================================
+  DOĞAL KALEM — tek dosyalık web uygulaması
+================================================================================
+  Bu dosya tek başına çalışır: bir tarayıcıda açmanız yeterli (sunucu gerekmez).
+
+  Bölümler (aşağıdaki <script> içinde aynı sırayla):
+    0. Yardımcılar: depolama, HTML kaçışı, dil algılama, cümle/kelime bölme
+    1. Kişisel üslup profili  (extractProfile)
+    2. Yapay zekâ izi analizi (analyze)  — tamamen tarayıcıda, API gerekmez
+    3. Yeniden yazma motoru   (Claude API, kullanıcının kendi anahtarıyla)
+    4. Karşılaştırma: kelime düzeyinde diff, değişiklik kabul/ret, anlam kontrolü
+    5. Temizlik: görünmez karakterler, markdown artıkları, .docx meta verisi
+    6. Arayüz: sekmeler, TR/EN dil, kopyala/indir, son 10 metin geçmişi
+
+  Dış bağımlılıklar yalnızca gerektiğinde, CDN'den, sabit sürümle yüklenir:
+    - JSZip 3.10.1          (.docx okuma/yazma)
+    - @anthropic-ai/sdk     (yeniden yazma; yalnızca "Yeniden yaz" basılınca)
+
+  Gizlilik: Örnek metinler, profil, geçmiş ve API anahtarı yalnızca bu
+  tarayıcının localStorage'ında tutulur. Metin yalnızca "Yeniden yaz" ya da
+  "Yapay zekâ ile anlam kontrolü" düğmesine basıldığında Anthropic API'sine
+  gönderilir.
+================================================================================
+-->
+<style>
+/* ---------- Renk belirteçleri (açık / koyu tema) ---------- */
+:root{
+  --bg:#f7f6f2; --surface:#ffffff; --surface-2:#f0eee8; --text:#1d1c1a; --muted:#6b675f;
+  --border:#dedbd2; --accent:#2f6b4f; --accent-ink:#ffffff; --danger:#b3261e; --ok:#2f6b4f;
+  --c-cliche:#f6d77a; --c-triad:#d9c6f5; --c-format:#f7c3d6; --c-hedge:#bfe6dd;
+  --c-invis:#ff8a80; --c-burst:#3b6fd8; --ins:#cdebd7; --del:#f6cfcc;
+  --shadow:0 1px 2px rgba(0,0,0,.06),0 2px 8px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#151513; --surface:#1f1f1c; --surface-2:#2a2a26; --text:#ecebe6; --muted:#a19d93;
+    --border:#3a3934; --accent:#6fbf95; --accent-ink:#0f1a14; --danger:#ff8a80; --ok:#6fbf95;
+    --c-cliche:#6b5413; --c-triad:#4a3770; --c-format:#6e2a44; --c-hedge:#1f5a4e;
+    --c-invis:#a3302a; --c-burst:#7ea4f2; --ins:#1e4a31; --del:#5c2522;
+    --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#151513; --surface:#1f1f1c; --surface-2:#2a2a26; --text:#ecebe6; --muted:#a19d93;
+  --border:#3a3934; --accent:#6fbf95; --accent-ink:#0f1a14; --danger:#ff8a80; --ok:#6fbf95;
+  --c-cliche:#6b5413; --c-triad:#4a3770; --c-format:#6e2a44; --c-hedge:#1f5a4e;
+  --c-invis:#a3302a; --c-burst:#7ea4f2; --ins:#1e4a31; --del:#5c2522;
+  --shadow:none;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;}
+.wrap{max-width:1100px;margin:0 auto;padding:0 16px 64px}
+header{display:flex;align-items:center;gap:12px;padding:18px 0 10px;flex-wrap:wrap}
+header h1{font-size:1.35rem;margin:0;letter-spacing:-.01em}
+header h1 span{color:var(--accent)}
+header .sub{color:var(--muted);font-size:.9rem;flex:1 1 220px}
+.hdr-actions{display:flex;gap:6px}
+
+nav.tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:1px solid var(--border);margin-bottom:18px;scrollbar-width:none}
+nav.tabs button{background:none;border:0;border-bottom:2px solid transparent;color:var(--muted);padding:10px 12px;font:inherit;font-size:.95rem;cursor:pointer;white-space:nowrap}
+nav.tabs button[aria-selected="true"]{color:var(--text);border-bottom-color:var(--accent);font-weight:600}
+section.panel{display:none}
+section.panel.active{display:block}
+
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card h2{font-size:1.05rem;margin:0 0 8px}
+.card h3{font-size:.95rem;margin:14px 0 6px}
+.hint{color:var(--muted);font-size:.88rem;margin:0 0 10px}
+textarea,input[type=text],input[type=password],select{width:100%;font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px}
+textarea{min-height:180px;resize:vertical;line-height:1.5}
+textarea.sample{min-height:110px}
+label.fld{display:block;font-size:.85rem;color:var(--muted);margin:10px 0 4px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+@media (max-width:760px){.grid2,.grid3{grid-template-columns:1fr}}
+
+.btn{display:inline-block;font:inherit;font-size:.92rem;border:1px solid var(--border);background:var(--surface-2);color:var(--text);border-radius:8px;padding:8px 14px;cursor:pointer}
+
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600}
+.btn.small{padding:4px 10px;font-size:.82rem}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:8px;overflow:hidden;flex-wrap:wrap}
+.seg button{border:0;background:var(--surface);color:var(--text);padding:7px 12px;font:inherit;font-size:.88rem;cursor:pointer;border-right:1px solid var(--border)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:600}
+
+/* ---------- Skor kartları ---------- */
+.overall{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.gauge{width:92px;height:92px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:1.5rem;flex:none}
+.gauge small{display:block;font-size:.65rem;font-weight:500;color:var(--muted);text-align:center}
+.scores{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-top:12px}
+.score{border:1px solid var(--border);border-radius:8px;padding:10px;background:var(--surface)}
+.score .top{display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:.9rem}
+.score .sw{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:6px;vertical-align:-1px}
+.bar{height:6px;background:var(--surface-2);border-radius:3px;margin:8px 0 6px;overflow:hidden}
+.bar i{display:block;height:100%;border-radius:3px}
+.score .why{color:var(--muted);font-size:.8rem;line-height:1.4}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:.82rem;color:var(--muted);margin:8px 0}
+
+/* ---------- Vurgulanmış metin ---------- */
+.hl{white-space:pre-wrap;word-wrap:break-word;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;line-height:1.75;max-height:520px;overflow:auto}
+.hl .c-cliche{background:var(--c-cliche);border-radius:3px}
+.hl .c-triad{background:var(--c-triad);border-radius:3px}
+.hl .c-format{background:var(--c-format);border-radius:3px}
+.hl .c-hedge{background:var(--c-hedge);border-radius:3px}
+.hl .c-invis{background:var(--c-invis);border-radius:3px;outline:1px dashed var(--danger)}
+.hl .c-burst{text-decoration:underline wavy var(--c-burst);text-decoration-thickness:1px;text-underline-offset:4px}
+.hl [title]{cursor:help}
+.invis-glyph{font-size:.7em;color:var(--danger);font-weight:700}
+
+/* ---------- Diff ---------- */
+.diffcol{white-space:pre-wrap;word-wrap:break-word;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;line-height:1.7;max-height:560px;overflow:auto}
+.diffcol del{background:var(--del);text-decoration:line-through;text-decoration-color:var(--danger)}
+.diffcol ins{background:var(--ins);text-decoration:none}
+.diffcol .rej{background:var(--surface-2);outline:1px dashed var(--muted)}
+.diffcol .hunk{cursor:pointer}
+.changes{list-style:none;margin:0;padding:0;max-height:420px;overflow:auto}
+.changes li{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;border-top:1px solid var(--border);padding:8px 0;font-size:.88rem}
+.changes .o{background:var(--del);padding:0 3px;border-radius:3px;text-decoration:line-through}
+.changes .n{background:var(--ins);padding:0 3px;border-radius:3px}
+.changes li.rejected .n{opacity:.45;text-decoration:line-through}
+.changes li.rejected .o{text-decoration:none;opacity:1}
+.cmp-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.cmp-table td,.cmp-table th{padding:6px 4px;border-bottom:1px solid var(--border);text-align:left}
+.cmp-table td.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.delta-good{color:var(--ok);font-weight:600}
+.delta-bad{color:var(--danger);font-weight:600}
+.warn{border-left:3px solid var(--danger);padding:8px 10px;background:var(--surface-2);border-radius:4px;margin:6px 0;font-size:.9rem}
+.okmsg{border-left:3px solid var(--ok);padding:8px 10px;background:var(--surface-2);border-radius:4px;margin:6px 0;font-size:.9rem}
+
+/* ---------- Profil ---------- */
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:.9rem}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:2px 10px;font-size:.82rem}
+.chip.neg{text-decoration:line-through;color:var(--muted)}
+
+.history{list-style:none;padding:0;margin:0}
+.history li{border-top:1px solid var(--border);padding:10px 0;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.history li .t{flex:1 1 240px;min-width:0}
+.history li .t b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history li .t small{color:var(--muted)}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--text);color:var(--bg);padding:8px 16px;border-radius:8px;font-size:.9rem;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;max-width:calc(100% - 32px)}
+.toast.show{opacity:1}
+.stream{white-space:pre-wrap;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;min-height:120px;max-height:460px;overflow:auto}
+.muted{color:var(--muted)}
+.spacer{flex:1}
+dialog{border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);max-width:520px;width:calc(100% - 32px);padding:18px}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+.check{display:flex;gap:8px;align-items:flex-start;font-size:.9rem;margin:6px 0}
+.check input{margin-top:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Doğal <span>Kalem</span></h1>
+    <div class="sub" data-i18n="tagline">Yapay zekâ izlerini bulur, metni sizin sesinizle yeniden yazar.</div>
+    <div class="hdr-actions">
+      <button class="btn small" id="btnLang" title="Türkçe / English">EN</button>
+      <button class="btn small" id="btnSettings" data-i18n="settings">Ayarlar</button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="analyze" aria-selected="true" data-i18n="tabAnalyze">1 · Analiz</button>
+    <button role="tab" data-tab="rewrite" data-i18n="tabRewrite">2 · Yeniden yaz</button>
+    <button role="tab" data-tab="compare" data-i18n="tabCompare">3 · Karşılaştır</button>
+    <button role="tab" data-tab="profile" data-i18n="tabProfile">Üslup profili</button>
+    <button role="tab" data-tab="clean" data-i18n="tabClean">Temizlik</button>
+    <button role="tab" data-tab="history" data-i18n="tabHistory">Geçmiş</button>
+  </nav>
+
+  <!-- ===================== ANALİZ ===================== -->
+  <section class="panel active" id="p-analyze">
+    <div class="card">
+      <h2 data-i18n="inputTitle">Metin</h2>
+      <p class="hint" data-i18n="inputHint">Yapay zekâyla üretilmiş ya da desteklenmiş metni yapıştırın. Analiz tamamen tarayıcınızda yapılır.</p>
+      <textarea id="inputText" spellcheck="false"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="btnAnalyze" data-i18n="analyze">Analiz et</button>
+        <button class="btn" id="btnQuickClean" data-i18n="quickClean">Görünmez karakterleri temizle</button>
+        <label class="btn" style="display:inline-block"><span data-i18n="loadDocx">.docx'ten yükle</span><input type="file" id="docxToInput" accept=".docx" hidden></label>
+        <span class="spacer"></span>
+        <span class="muted" id="langBadge"></span>
+      </div>
+    </div>
+    <div id="analysisOut"></div>
+  </section>
+
+  <!-- ===================== YENİDEN YAZ ===================== -->
+  <section class="panel" id="p-rewrite">
+    <div class="card">
+      <h2 data-i18n="rwTitle">Yeniden yazma ayarları</h2>
+      <p class="hint" id="rwProfileNote"></p>
+      <label class="fld" data-i18n="tone">Ton</label>
+      <div class="seg" id="toneSeg">
+        <button data-v="resmi" aria-pressed="true" data-i18n="toneResmi">Resmî yazışma</button>
+        <button data-v="akademik" data-i18n="toneAkademik">Akademik</button>
+        <button data-v="proje" data-i18n="toneProje">Proje başvurusu</button>
+        <button data-v="samimi" data-i18n="toneSamimi">Samimi e-posta</button>
+        <button data-v="ogrenci" data-i18n="toneOgrenci">Öğrenci metni</button>
+      </div>
+      <label class="fld" data-i18n="intensity">Yoğunluk</label>
+      <div class="seg" id="intSeg">
+        <button data-v="hafif" data-i18n="intHafif">Hafif dokunuş</button>
+        <button data-v="orta" aria-pressed="true" data-i18n="intOrta">Orta</button>
+        <button data-v="bastan" data-i18n="intBastan">Baştan yaz</button>
+      </div>
+      <label class="fld" data-i18n="outLang">Çıktı dili</label>
+      <div class="seg" id="outLangSeg">
+        <button data-v="auto" aria-pressed="true" data-i18n="langAuto">Metinle aynı</button>
+        <button data-v="tr">Türkçe</button>
+        <button data-v="en">English</button>
+      </div>
+      <label class="fld" data-i18n="extraNote">Ek not (isteğe bağlı)</label>
+      <input type="text" id="rwNote" data-i18n-ph="extraNotePh" placeholder="Örn. okul müdürüne gidecek, kısa tutulsun">
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary" id="btnRewrite" data-i18n="rewrite">Yeniden yaz</button>
+        <button class="btn" id="btnStop" hidden data-i18n="stop">Durdur</button>
+        <span class="muted" id="rwStatus"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="rwOutput">Çıktı</h2>
+      <div class="stream" id="rwStream"></div>
+    </div>
+  </section>
+
+  <!-- ===================== KARŞILAŞTIR ===================== -->
+  <section class="panel" id="p-compare">
+    <div id="compareEmpty" class="card"><p class="muted" data-i18n="cmpEmpty">Önce bir metni yeniden yazın.</p></div>
+    <div id="compareOut" hidden>
+      <div class="card">
+        <div class="row">
+          <h2 style="margin:0" data-i18n="cmpTitle">Yan yana karşılaştırma</h2>
+          <span class="spacer"></span>
+          <button class="btn small" id="btnAcceptAll" data-i18n="acceptAll">Tümünü kabul et</button>
+          <button class="btn small" id="btnRejectAll" data-i18n="rejectAll">Tümünü reddet</button>
+        </div>
+        <p class="hint" data-i18n="cmpHint">Sağdaki metinde bir değişikliğe tıklayarak kabul/ret arasında geçiş yapabilirsiniz.</p>
+        <div class="grid2">
+          <div><label class="fld" data-i18n="original">Orijinal</label><div class="diffcol" id="diffLeft"></div></div>
+          <div><label class="fld" data-i18n="result">Sonuç (seçimlerinize göre)</label><div class="diffcol" id="diffRight"></div></div>
+        </div>
+        <div class="row" style="margin-top:12px">
+          <button class="btn primary" id="btnCopy" data-i18n="copy">Kopyala</button>
+          <button class="btn" id="btnTxt" data-i18n="dlTxt">.txt indir</button>
+          <button class="btn" id="btnDocx" data-i18n="dlDocx">.docx indir</button>
+          <button class="btn" id="btnToInput" data-i18n="toInput">Sonucu analiz alanına taşı</button>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="card">
+          <h2 data-i18n="scoreChange">Skor değişimi</h2>
+          <div id="scoreCompare"></div>
+        </div>
+        <div class="card">
+          <h2 data-i18n="meaningCheck">Anlam kontrolü</h2>
+          <div id="meaningOut"></div>
+          <div class="row" style="margin-top:8px"><button class="btn small" id="btnAiMeaning" data-i18n="aiMeaning">Yapay zekâ ile derin anlam kontrolü</button></div>
+          <div id="aiMeaningOut"></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2><span data-i18n="changesList">Değişiklikler</span> <span class="muted" id="chCount"></span></h2>
+        <ul class="changes" id="changesList"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== PROFİL ===================== -->
+  <section class="panel" id="p-profile">
+    <div class="card">
+      <h2 data-i18n="profTitle">Kişisel üslup profili</h2>
+      <p class="hint" data-i18n="profHint">Kendi yazdığınız 3–5 metni (e-posta, makale, proje metni) yapıştırın. Ne kadar çeşitli olursa profil o kadar isabetli olur.</p>
+      <div id="samples"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="btnAddSample" data-i18n="addSample">+ Örnek ekle</button>
+        <button class="btn primary" id="btnBuildProfile" data-i18n="buildProfile">Profili çıkar ve kaydet</button>
+        <button class="btn" id="btnDeleteProfile" data-i18n="deleteProfile">Profili sil</button>
+      </div>
+    </div>
+    <div id="profileOut"></div>
+  </section>
+
+  <!-- ===================== TEMİZLİK ===================== -->
+  <section class="panel" id="p-clean">
+    <div class="card">
+      <h2 data-i18n="cleanTitle">Metin temizliği</h2>
+      <p class="hint" data-i18n="cleanHint">Analiz alanındaki metne uygulanır.</p>
+      <label class="check"><input type="checkbox" id="clInvis" checked> <span data-i18n="clInvis">Sıfır genişlikli karakterler (U+200B, 200C, 200D, FEFF, 2060, yumuşak tire)</span></label>
+      <label class="check"><input type="checkbox" id="clNbsp" checked> <span data-i18n="clNbsp">Bölünemez boşlukları normal boşluğa çevir</span></label>
+      <label class="check"><input type="checkbox" id="clQuotes" checked> <span data-i18n="clQuotes">Tırnak işaretlerini tek biçime getir</span></label>
+      <label class="check"><input type="checkbox" id="clMd" checked> <span data-i18n="clMd">Markdown artıkları (**kalın**, # başlık, `kod`, madde işaretleri)</span></label>
+      <label class="check"><input type="checkbox" id="clDash"> <span data-i18n="clDash">Uzun tireleri (—) virgüle / kısa tireye çevir</span></label>
+      <label class="check"><input type="checkbox" id="clSpaces" checked> <span data-i18n="clSpaces">Çift boşlukları ve satır sonu boşluklarını sil</span></label>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="btnClean" data-i18n="cleanNow">Tek tıkla temizle</button>
+        <span class="muted" id="cleanReport"></span>
+      </div>
+    </div>
+    <div class="card">
+      <h2 data-i18n="docxTitle">.docx meta veri temizliği</h2>
+      <p class="hint" data-i18n="docxHint">Yazar, son düzenleyen, şirket, uygulama, düzenleme süresi, revizyon kimlikleri (rsid), izlenen değişiklikler ve yorum yazarları silinir. Dosya bilgisayarınızdan çıkmaz.</p>
+      <label class="check"><input type="checkbox" id="dxAccept" checked> <span data-i18n="dxAccept">İzlenen değişiklikleri kabul et (geçmişi sil)</span></label>
+      <label class="check"><input type="checkbox" id="dxComments"> <span data-i18n="dxComments">Yorumları tamamen kaldır</span></label>
+      <div class="row" style="margin-top:10px">
+        <label class="btn primary"><span data-i18n="pickDocx">.docx seç ve temizle</span><input type="file" id="docxClean" accept=".docx" hidden></label>
+      </div>
+      <div id="docxReport"></div>
+    </div>
+  </section>
+
+  <!-- ===================== GEÇMİŞ ===================== -->
+  <section class="panel" id="p-history">
+    <div class="card">
+      <div class="row"><h2 style="margin:0" data-i18n="histTitle">Son 10 metin</h2><span class="spacer"></span><button class="btn small" id="btnClearHist" data-i18n="clearHist">Geçmişi temizle</button></div>
+      <ul class="history" id="historyList"></ul>
+    </div>
+  </section>
+</div>
+
+<!-- Ayarlar penceresi -->
+<dialog id="dlgSettings">
+  <h2 style="margin-top:0" data-i18n="settings">Ayarlar</h2>
+  <label class="fld" data-i18n="apiKey">Anthropic API anahtarı</label>
+  <input type="password" id="apiKey" autocomplete="off" placeholder="sk-ant-...">
+  <p class="hint" style="margin-top:6px" data-i18n="apiKeyHint">Anahtar yalnızca bu tarayıcıda saklanır ve yalnızca api.anthropic.com adresine gönderilir. Ortak bilgisayarlarda kullanmayın.</p>
+  <label class="fld" data-i18n="model">Model</label>
+  <select id="model">
+    <option value="claude-opus-5-5">Claude Opus 5.5 (önerilen / recommended)</option>
+    <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
+    <option value="claude-haiku-5-5">Claude Haiku 5.5</option>
+  </select>
+  <label class="fld" data-i18n="theme">Tema</label>
+  <select id="theme"><option value="" data-i18n="themeAuto">Sistem</option><option value="light" data-i18n="themeLight">Açık</option><option value="dark" data-i18n="themeDark">Koyu</option></select>
+  <div class="row" style="margin-top:16px;justify-content:flex-end">
+    <button class="btn" id="btnCloseSettings" data-i18n="close">Kapat</button>
+    <button class="btn primary" id="btnSaveSettings" data-i18n="save">Kaydet</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+/* ============================================================================
+   0. YARDIMCILAR
+   ========================================================================== */
+
+/** localStorage her zaman erişilebilir olmayabilir (gizli pencere vb.) — sarmalayalım. */
+const store = {
+  get(k, def = null) { try { const v = localStorage.getItem('dk.' + k); return v == null ? def : JSON.parse(v); } catch { return def; } },
+  set(k, v) { try { localStorage.setItem('dk.' + k, JSON.stringify(v)); return true; } catch { return false; } },
+  del(k) { try { localStorage.removeItem('dk.' + k); } catch {} }
+};
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clamp = (x, a = 0, b = 100) => Math.max(a, Math.min(b, x));
+const round = (x, d = 1) => Math.round(x * 10 ** d) / 10 ** d;
+const mean = a => a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0;
+const stdev = a => { if (a.length < 2) return 0; const m = mean(a); return Math.sqrt(mean(a.map(x => (x - m) ** 2))); };
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/** Kelimeler: Unicode harf/rakam dizileri (Türkçe karakterler dâhil). */
+const wordsOf = text => text.match(/[\p{L}\p{N}][\p{L}\p{N}'’\-]*/gu) || [];
+
+/** Basit dil algılama: Türkçe'ye özgü harfler + sık kelimeler. */
+function detectLang(text) {
+  const w = wordsOf(text.toLocaleLowerCase('tr')).slice(0, 600);
+  if (!w.length) return 'tr';
+  const tr = new Set(['ve', 'bir', 'bu', 'için', 'ile', 'da', 'de', 'çok', 'olarak', 'daha', 'gibi', 'olan', 'ama', 'en', 'ne', 'şu', 'mi', 'değil', 'kadar', 'sonra']);
+  const en = new Set(['the', 'and', 'of', 'to', 'is', 'in', 'that', 'it', 'for', 'with', 'as', 'on', 'this', 'are', 'be', 'was', 'by', 'or', 'an', 'not']);
+  let t = 0, e = 0;
+  for (const x of w) { if (tr.has(x)) t++; if (en.has(x)) e++; if (/[çğışöü]/.test(x)) t += 0.5; }
+  return t >= e ? 'tr' : 'en';
+}
+
+/**
+ * Cümle bölme — başlangıç/bitiş konumlarını korur (vurgulama için gerekli).
+ * Kısaltmalar (Dr., vb., e.g.) ve ondalık sayılar (3.5) yanlış bölünmesin diye birleştirilir.
+ */
+function splitSentences(text) {
+  const out = [];
+  const re = /[^.!?…\n]+(?:[.!?…]+["'”’)\]]*|\n|$)/g;
+  let m;
+  while ((m = re.exec(text))) {
+    if (m[0] === '' ) { re.lastIndex++; continue; }
+    const raw = m[0];
+    const lead = raw.length - raw.trimStart().length;
+    const s = raw.trim();
+    if (!s) continue;
+    const start = m.index + lead, end = start + s.length;
+    const prev = out[out.length - 1];
+    if (prev && (/(?:^|\s)(Dr|Prof|Doç|Öğr|Gör|vb|vs|bkz|örn|Sn|Mr|Mrs|Ms|St|No|e\.g|i\.e|etc|vd|çev|Yrd)\.$/i.test(prev.text) ||
+                 (/\d\.$/.test(prev.text) && /^\d/.test(s))) && text.slice(prev.end, start).indexOf('\n') === -1) {
+      prev.end = end; prev.text = text.slice(prev.start, end);
+    } else out.push({ start, end, text: s });
+  }
+  for (const s of out) s.words = wordsOf(s.text).length;
+  return out.filter(s => s.words > 0);
+}
+const splitParagraphs = text => text.split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+
+/**
+ * Türkçe duyarlı ifade → RegExp. "I/ı/İ/i" farkı yüzünden `i` bayrağı yetmez;
+ * her i-benzeri harfi karakter sınıfına çeviririz. Sondaki "~" Türkçe ekleri
+ * (kapsamlı-dır, oynamak-tadır) kabul etmek için kullanılır.
+ */
+function phraseRe(p) {
+  const suffix = p.endsWith('~'); if (suffix) p = p.slice(0, -1);
+  let src = '';
+  for (const ch of p) {
+    if (/[iıİI]/.test(ch)) src += '[iıİI]';
+    else if (ch === ' ') src += '\\s+';
+    else if (ch === "'") src += "['’]";
+    else src += ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+  return new RegExp(`(?<![\\p{L}\\p{N}])${src}${suffix ? '\\p{L}*' : ''}(?![\\p{L}\\p{N}])`, 'giu');
+}
+
+/* ============================================================================
+   ARAYÜZ METİNLERİ (TR / EN)
+   ========================================================================== */
+const I18N = {
+  tr: {},  // Türkçe metinler HTML'de zaten yazılı; ilk yüklemede buraya kopyalanır.
+  en: {
+    tagline: 'Finds AI fingerprints and rewrites text in your own voice.', settings: 'Settings',
+    tabAnalyze: '1 · Analyze', tabRewrite: '2 · Rewrite', tabCompare: '3 · Compare', tabProfile: 'Style profile', tabClean: 'Clean-up', tabHistory: 'History',
+    inputTitle: 'Text', inputHint: 'Paste AI-generated or AI-assisted text. Analysis runs entirely in your browser.',
+    analyze: 'Analyze', quickClean: 'Remove invisible characters', loadDocx: 'Load from .docx',
+    rwTitle: 'Rewrite settings', tone: 'Tone', toneResmi: 'Official letter', toneAkademik: 'Academic', toneProje: 'Project proposal', toneSamimi: 'Friendly email', toneOgrenci: 'Student text',
+    intensity: 'Intensity', intHafif: 'Light touch', intOrta: 'Medium', intBastan: 'Full rewrite', outLang: 'Output language', langAuto: 'Same as text',
+    extraNote: 'Extra note (optional)', extraNotePh: 'e.g. it goes to the school principal, keep it short', rewrite: 'Rewrite', stop: 'Stop', rwOutput: 'Output',
+    cmpEmpty: 'Rewrite a text first.', cmpTitle: 'Side-by-side comparison', acceptAll: 'Accept all', rejectAll: 'Reject all',
+    cmpHint: 'Click a change in the right column to toggle accept / reject.', original: 'Original', result: 'Result (based on your choices)',
+    copy: 'Copy', dlTxt: 'Download .txt', dlDocx: 'Download .docx', toInput: 'Move result to the analysis box',
+    scoreChange: 'Score change', meaningCheck: 'Meaning check', aiMeaning: 'Deep meaning check with AI', changesList: 'Changes',
+    profTitle: 'Personal style profile', profHint: 'Paste 3–5 texts you wrote yourself (emails, articles, project texts). The more varied, the better the profile.',
+    addSample: '+ Add sample', buildProfile: 'Build & save profile', deleteProfile: 'Delete profile',
+    cleanTitle: 'Text clean-up', cleanHint: 'Applied to the text in the analysis box.',
+    clInvis: 'Zero-width characters (U+200B, 200C, 200D, FEFF, 2060, soft hyphen)', clNbsp: 'Convert non-breaking spaces to normal spaces',
+    clQuotes: 'Normalize quotation marks', clMd: 'Markdown leftovers (**bold**, # headings, `code`, bullets)', clDash: 'Turn em dashes (—) into commas / hyphens',
+    clSpaces: 'Remove double spaces and trailing spaces', cleanNow: 'Clean in one click',
+    docxTitle: '.docx metadata clean-up', docxHint: 'Removes author, last modified by, company, application, editing time, revision IDs (rsid), tracked changes and comment authors. The file never leaves your computer.',
+    dxAccept: 'Accept tracked changes (erase history)', dxComments: 'Remove comments entirely', pickDocx: 'Choose .docx and clean',
+    histTitle: 'Last 10 texts', clearHist: 'Clear history', apiKey: 'Anthropic API key',
+    apiKeyHint: 'The key is stored only in this browser and sent only to api.anthropic.com. Do not use on shared computers.',
+    model: 'Model', theme: 'Theme', themeAuto: 'System', themeLight: 'Light', themeDark: 'Dark', close: 'Close', save: 'Save'
+  }
+};
+// Dinamik (JS içinde üretilen) metinler
+const DYN = {
+  tr: {
+    overall: 'Genel yapay zekâ benzerliği', low: 'Düşük', mid: 'Orta', high: 'Yüksek', words: 'kelime', sentences: 'cümle',
+    cat_cliche: 'Klişe kelime ve ifadeler', cat_burst: 'Tekdüze cümle uzunluğu', cat_triad: 'Üçlü liste / simetri', cat_format: 'Biçim artıkları',
+    cat_hedge: 'Boş / temkinli dil', cat_invis: 'Görünmez karakterler', na: 'yetersiz veri',
+    emptyText: 'Önce bir metin yapıştırın.', highlighted: 'Vurgulanmış metin', noProfile: 'Kayıtlı profil yok — genel doğal üslup kullanılacak. Daha isabetli sonuç için “Üslup profili” sekmesinden profil oluşturun.',
+    profileOn: 'Kayıtlı üslup profiliniz kullanılacak', sample: 'Örnek', samplePh: 'Kendi yazdığınız bir metni buraya yapıştırın…',
+    needSamples: 'En az 1 örnek gerekli (3–5 önerilir).', fewSamples: 'Profil kaydedildi. Daha isabetli sonuç için 3–5 örnek önerilir.', profileSaved: 'Profil kaydedildi.',
+    profileDeleted: 'Profil silindi.', sentLen: 'Ortalama cümle uzunluğu', variation: 'Değişkenlik', connectors: 'Sık kullanılan bağlaçlar', address: 'Hitap',
+    greetings: 'Açılışlar', signoffs: 'Kapanışlar', formality: 'Resmiyet', punct: 'Noktalama (100 kelimede)', favorites: 'Sevdiği ifadeler', never: 'Hiç kullanmadığı ifadeler',
+    notes: 'Ek üslup notları (elle düzenleyebilirsiniz)', extraFav: 'Eklemek istediğiniz sevdiğiniz ifadeler (virgülle)', extraAvoid: 'Asla kullanılmasın (virgülle)',
+    saveEdits: 'Düzenlemeleri kaydet', none: '—', cleaned: n => `${n} değişiklik yapıldı.`, nothingToClean: 'Temizlenecek bir şey bulunmadı.',
+    copied: 'Kopyalandı.', histEmpty: 'Henüz kayıt yok.', load: 'Aç', del: 'Sil', score: 'skor', before: 'Önce', after: 'Sonra', category: 'Kategori',
+    accept: 'Kabul', reject: 'Reddet', meaningOk: 'Rakamlar, alıntılar, bağlantılar ve özel adlar korunmuş görünüyor.',
+    missing: 'Yeni metinde bulunamadı', added: 'Yeni metinde eklenmiş (uydurma olabilir, kontrol edin)', placeholders: 'Doldurmanız gereken yer tutucular',
+    numbers: 'Sayı', quotes: 'Alıntı', urls: 'Bağlantı/e-posta', names: 'Özel ad', cites: 'Kaynak', apiNeeded: 'Bu işlem için Ayarlar’dan API anahtarı girin.',
+    docxDone: 'Temiz dosya indirildi', docxFound: 'Bulunan ve silinen bilgiler', docxNone: 'Kişisel meta veri bulunamadı; dosya yine de normalleştirildi.',
+    loadedDocx: 'Belgedeki metin yüklendi.', libFail: 'Kütüphane yüklenemedi (internet bağlantısı gerekli).', settingsSaved: 'Ayarlar kaydedildi.',
+    rwSoon: 'Yeniden yazma motoru henüz eklenmedi.', formalLabels: ['Çok samimi', 'Samimi', 'Dengeli', 'Resmî', 'Çok resmî'],
+    addrSiz: 'siz (resmî)', addrSen: 'sen (samimi)', addrMixed: 'karışık', addrYou: 'you', addrUnknown: 'belirsiz', firstPerson: 'Birinci tekil şahıs (100 kelimede)',
+    quoteStyle: 'Tırnak tercihi', curly: 'kıvrık “ ”', straight: 'düz " "', guillemet: '« »', paragraphs: 'Paragraf başına cümle', shortLong: 'Kısa (<8) / uzun (>25) cümle oranı'
+  },
+  en: {
+    overall: 'Overall AI-likeness', low: 'Low', mid: 'Medium', high: 'High', words: 'words', sentences: 'sentences',
+    cat_cliche: 'Cliché words & phrases', cat_burst: 'Monotonous sentence length', cat_triad: 'Triplets / symmetry', cat_format: 'Formatting leftovers',
+    cat_hedge: 'Vague / hedging language', cat_invis: 'Invisible characters', na: 'not enough data',
+    emptyText: 'Paste a text first.', highlighted: 'Highlighted text', noProfile: 'No saved profile — a generic natural style will be used. Build a profile in the “Style profile” tab for better results.',
+    profileOn: 'Your saved style profile will be used', sample: 'Sample', samplePh: 'Paste a text you wrote yourself…',
+    needSamples: 'At least 1 sample is needed (3–5 recommended).', fewSamples: 'Profile saved. 3–5 samples are recommended for better accuracy.', profileSaved: 'Profile saved.',
+    profileDeleted: 'Profile deleted.', sentLen: 'Average sentence length', variation: 'Variation', connectors: 'Frequent connectors', address: 'Form of address',
+    greetings: 'Openings', signoffs: 'Sign-offs', formality: 'Formality', punct: 'Punctuation (per 100 words)', favorites: 'Favourite phrases', never: 'Never-used phrases',
+    notes: 'Extra style notes (editable)', extraFav: 'Extra favourite phrases (comma-separated)', extraAvoid: 'Never use (comma-separated)',
+    saveEdits: 'Save edits', none: '—', cleaned: n => `${n} changes made.`, nothingToClean: 'Nothing to clean.',
+    copied: 'Copied.', histEmpty: 'No entries yet.', load: 'Open', del: 'Delete', score: 'score', before: 'Before', after: 'After', category: 'Category',
+    accept: 'Accept', reject: 'Reject', meaningOk: 'Numbers, quotes, links and proper names appear to be preserved.',
+    missing: 'Missing from the new text', added: 'Added in the new text (may be invented — check)', placeholders: 'Placeholders you need to fill in',
+    numbers: 'Number', quotes: 'Quote', urls: 'Link/email', names: 'Proper name', cites: 'Citation', apiNeeded: 'Enter an API key in Settings for this.',
+    docxDone: 'Clean file downloaded', docxFound: 'Found and removed', docxNone: 'No personal metadata found; the file was normalized anyway.',
+    loadedDocx: 'Document text loaded.', libFail: 'Library failed to load (internet connection needed).', settingsSaved: 'Settings saved.',
+    rwSoon: 'Rewrite engine not added yet.', formalLabels: ['Very casual', 'Casual', 'Balanced', 'Formal', 'Very formal'],
+    addrSiz: 'siz (formal)', addrSen: 'sen (informal)', addrMixed: 'mixed', addrYou: 'you', addrUnknown: 'unclear', firstPerson: 'First person singular (per 100 words)',
+    quoteStyle: 'Quote style', curly: 'curly “ ”', straight: 'straight " "', guillemet: '« »', paragraphs: 'Sentences per paragraph', shortLong: 'Short (<8) / long (>25) sentence share'
+  }
+};
+let UI = store.get('uiLang', 'tr');
+const D = k => DYN[UI][k] ?? DYN.tr[k] ?? k;
+
+function applyI18n() {
+  $$('[data-i18n]').forEach(el => {
+    const k = el.dataset.i18n;
+    if (!(k in I18N.tr)) I18N.tr[k] = el.textContent;     // ilk çalıştırmada TR'yi yakala
+    el.textContent = (UI === 'en' ? I18N.en[k] : I18N.tr[k]) ?? I18N.tr[k];
+  });
+  $$('[data-i18n-ph]').forEach(el => {
+    const k = el.dataset.i18nPh;
+    if (!(k in I18N.tr)) I18N.tr[k] = el.placeholder;
+    el.placeholder = (UI === 'en' ? I18N.en[k] : I18N.tr[k]) ?? I18N.tr[k];
+  });
+  document.documentElement.lang = UI;
+  $('#btnLang').textContent = UI === 'tr' ? 'EN' : 'TR';
+}
+
+/* ============================================================================
+   1. KİŞİSEL ÜSLUP PROFİLİ
+   ========================================================================== */
+
+const CONNECTORS = {
+  tr: ['ama', 'fakat', 'ancak', 'lakin', 'yani', 'çünkü', 'zaten', 'hatta', 'bu yüzden', 'bu nedenle', 'bu sebeple', 'dolayısıyla', 'ayrıca', 'üstelik',
+       'yine de', 'oysa', 'aslında', 'açıkçası', 'mesela', 'örneğin', 'kısacası', 'sonuçta', 'öte yandan', 'bununla birlikte', 'bir de', 'hem de', 'ya da', 'veya',
+       'ki', 'şöyle ki', 'yalnız', 'neyse', 'tabii', 'elbette', 'özellikle', 'böylece', 'ayrıyeten', 'sonra', 'önce', 'nitekim', 'halbuki'],
+  en: ['but', 'so', 'because', 'also', 'however', 'though', 'although', 'actually', 'anyway', 'still', 'yet', 'then', 'plus', 'besides', 'therefore', 'thus',
+       'instead', 'honestly', 'basically', 'moreover', 'furthermore', 'meanwhile', 'otherwise', 'for example', 'for instance', 'in fact', 'that said', 'and', 'or']
+};
+const GREETINGS = {
+  tr: ['Merhaba', 'Merhabalar', 'Selam', 'Selamlar', 'Sayın', 'Değerli', 'Kıymetli', 'Sevgili', 'Hocam', 'Günaydın', 'İyi günler', 'Saygıdeğer'],
+  en: ['Hi', 'Hello', 'Dear', 'Hey', 'Good morning', 'Good afternoon', 'Greetings']
+};
+const SIGNOFFS = {
+  tr: ['Saygılarımla', 'Saygılarımızla', 'İyi çalışmalar', 'Sevgiler', 'Sevgilerimle', 'Teşekkürler', 'Teşekkür ederim', 'Kolay gelsin', 'Gereğini arz ederim',
+       'Gereğini bilgilerinize arz ederim', 'Bilgilerinize sunarım', 'Hoşça kalın', 'Görüşmek üzere', 'Selamlar', 'İyi günler dilerim', 'Esenlikler dilerim'],
+  en: ['Best', 'Best regards', 'Kind regards', 'Regards', 'Thanks', 'Thank you', 'Cheers', 'Sincerely', 'Warm regards', 'Warmly', 'All the best', 'Talk soon']
+};
+const STOP = {
+  tr: new Set('ve veya ile bir bu şu o da de ki mi mu mı mü için gibi kadar daha en çok az ne her hem ise ya ama ben sen biz siz onlar olan olarak olan ile çok'.split(' ')),
+  en: new Set('the a an and or of to in on at for with is are was were be been it this that as by from we you i they he she our your their my not but so'.split(' '))
+};
+
+/** Profil çıkarımı — tüm sayısal ölçümler tarayıcıda yapılır. */
+function extractProfile(samples) {
+  const all = samples.join('\n\n');
+  const lang = detectLang(all);
+  // Hitap satırları ("Merhaba Ayşe Hanım,") ve imzalar ("Özge") cümle istatistiğini bozmasın
+  const sents = samples.flatMap(s => splitSentences(s)).filter(s => !(s.words <= 3 && !/[.!?…]$/.test(s.text)));
+  const lens = sents.map(s => s.words);
+  const words = wordsOf(all);
+  const wc = words.length || 1;
+  const lowerAll = all;
+  const count = re => (lowerAll.match(re) || []).length;
+  const per100 = n => round(n / wc * 100, 2);
+
+  // Bağlaçlar: hem TR hem EN listesini tarar (karma metinler için)
+  const connectors = [];
+  for (const c of [...CONNECTORS.tr, ...CONNECTORS.en]) {
+    const n = (all.match(phraseRe(c)) || []).length;
+    if (n > 0 && !(STOP.en.has(c) && c.length < 4 && lang === 'tr')) connectors.push({ w: c, n });
+  }
+  connectors.sort((a, b) => b.n - a.n);
+
+  // Açılış ve kapanış kalıpları: her örneğin ilk ve son 2 satırına bakılır
+  const greetings = new Set(), signoffs = new Set();
+  for (const s of samples) {
+    const lines = s.split('\n').map(l => l.trim()).filter(Boolean);
+    const head = lines.slice(0, 2).join(' '), tail = lines.slice(-3).join(' ');
+    for (const g of [...GREETINGS.tr, ...GREETINGS.en]) if (phraseRe(g).test(head)) greetings.add((head.match(phraseRe(g + '~')) || [g])[0]);
+    for (const g of [...SIGNOFFS.tr, ...SIGNOFFS.en]) if (phraseRe(g).test(tail)) signoffs.add(g);
+  }
+
+  // Hitap biçimi ve resmiyet
+  let address = 'unknown', fScore = 50; const fSignals = [];
+  if (lang === 'tr') {
+    const siz = count(/(?<![\p{L}])(siz|size|sizin|sizi|sizden|sizinle)(?![\p{L}])|\p{L}+(sınız|siniz|sunuz|sünüz|ınız|iniz|unuz|ünüz)(?![\p{L}])/giu);
+    const sen = count(/(?<![\p{L}])(sen|sana|senin|seni|senden|seninle)(?![\p{L}])|\p{L}+(sın|sin|sun|sün)(?![\p{L}])/giu);
+    address = siz && sen ? (siz > sen * 2 ? 'siz' : sen > siz * 2 ? 'sen' : 'mixed') : siz ? 'siz' : sen ? 'sen' : 'unknown';
+    const formal = count(/arz eder|rica eder|Sayın|\p{L}+(mektedir|maktadır|mıştır|miştir|muştur|müştür|ilmiştir|ılmıştır)|hususunda|ilgili olarak|müteşekkir/giu);
+    const casual = count(/(?<![\p{L}])(ya|yaa|işte|valla|vallahi|hani|bence|tamam|süper|harika|kocaman|canım|hadi|falan|filan)(?![\p{L}])|!|😊|🙂|😀|:\)/giu);
+    fScore = clamp(50 + (formal - casual) / wc * 100 * 12 + (address === 'siz' ? 10 : address === 'sen' ? -15 : 0));
+    fSignals.push(`resmî kalıp: ${formal}`, `gündelik işaret: ${casual}`);
+  } else {
+    address = 'you';
+    const contr = count(/\b\w+(n't|'m|'re|'ll|'ve|'d)\b/gi);
+    const formal = count(/\b(hereby|pursuant|kindly|sincerely|regards|furthermore|therefore|accordingly|herewith)\b/gi);
+    const casual = count(/\b(hey|gonna|wanna|yeah|cool|awesome|stuff|kinda|lol)\b|!|😊|🙂/gi) + contr;
+    fScore = clamp(50 + (formal - casual) / wc * 100 * 10);
+    fSignals.push(`contractions: ${contr}`, `formal markers: ${formal}`);
+  }
+
+  // Noktalama alışkanlıkları
+  const punct = {
+    comma: per100(count(/,/g)), semicolon: per100(count(/;/g)), colon: per100(count(/:/g)),
+    emDash: per100(count(/—/g)), dash: per100(count(/ [-–] /g)), ellipsis: per100(count(/\.\.\.|…/g)),
+    exclaim: per100(count(/!/g)), question: per100(count(/\?/g)), paren: per100(count(/\(/g))
+  };
+  const qc = count(/[“”]/g), qs = count(/"/g), qg = count(/[«»]/g);
+  const quoteStyle = qc >= qs && qc >= qg && qc ? 'curly' : qg > qs ? 'guillemet' : qs ? 'straight' : 'none';
+  const firstPerson = per100(lang === 'tr'
+    ? count(/(?<![\p{L}])(ben|bana|benim|beni|bende|benden)(?![\p{L}])|\p{L}+(dım|dim|dum|düm|tım|tim|tum|tüm|ıyorum|iyorum|uyorum|üyorum|acağım|eceğim)(?![\p{L}])/giu)
+    : count(/\b(I|me|my|mine|I'm|I've|I'd)\b/g));
+
+  // Sevilen ifadeler: en az 2 örnekte ya da 3+ kez geçen 2–3 kelimelik n-gramlar
+  const stop = STOP[lang];
+  const ngramDocs = new Map(), ngramCount = new Map();
+  samples.forEach((s, i) => splitSentences(s).forEach(sen => {   // n-gramlar cümle sınırını aşmaz
+    const w = wordsOf(sen.text.toLocaleLowerCase(lang === 'tr' ? 'tr' : 'en'));
+    for (let n = 2; n <= 3; n++) for (let k = 0; k + n <= w.length; k++) {
+      const g = w.slice(k, k + n);
+      if (g.every(x => stop.has(x)) || stop.has(g[0]) && stop.has(g[n - 1]) || g.some(x => /^\d+$/.test(x))) continue;
+      const key = g.join(' ');
+      ngramCount.set(key, (ngramCount.get(key) || 0) + 1);
+      if (!ngramDocs.has(key)) ngramDocs.set(key, new Set());
+      ngramDocs.get(key).add(i);
+    }
+  }));
+  const favorites = [...ngramCount.entries()]
+    .filter(([k, n]) => (ngramDocs.get(k).size >= 2 && samples.length > 1) || n >= 3)
+    .sort((a, b) => (ngramDocs.get(b[0]).size - ngramDocs.get(a[0]).size) || (b[1] - a[1]))
+    .map(([k]) => k)
+    .filter((k, i, arr) => !arr.some((o, j) => j < i && (o.includes(k) || k.includes(o))))
+    .slice(0, 12);
+
+  // Hiç kullanmadığı klişeler (sadece algılanan dildeki liste)
+  const neverUsed = CLICHES[lang].filter(c => !(all.match(phraseRe(c.p)) || []).length).map(c => c.p.replace('~', '')).slice(0, 40);
+
+  const paras = samples.flatMap(splitParagraphs).map(p => splitSentences(p).length).filter(Boolean);
+  return {
+    v: 1, createdAt: Date.now(), lang, sampleCount: samples.length, wordCount: words.length,
+    sentence: {
+      mean: round(mean(lens)), sd: round(stdev(lens)), cv: round(stdev(lens) / (mean(lens) || 1), 2),
+      min: Math.min(...lens), max: Math.max(...lens),
+      shortPct: Math.round(lens.filter(l => l < 8).length / (lens.length || 1) * 100),
+      longPct: Math.round(lens.filter(l => l > 25).length / (lens.length || 1) * 100)
+    },
+    paraSentences: round(mean(paras)),
+    connectors: connectors.slice(0, 12), greetings: [...greetings], signoffs: [...signoffs],
+    address, formality: { score: Math.round(fScore), signals: fSignals }, punct, quoteStyle, firstPerson,
+    favorites, neverUsed, notes: '', extraFav: '', extraAvoid: ''
+  };
+}
+
+/** Profili, yeniden yazma isteminde kullanılacak kısa bir tarife çevirir. */
+function profileToPrompt(p) {
+  if (!p) return '';
+  const fl = ['very casual', 'casual', 'balanced', 'formal', 'very formal'][Math.min(4, Math.floor(p.formality.score / 20))];
+  const L = [
+    `- Language of samples: ${p.lang === 'tr' ? 'Turkish' : 'English'}`,
+    `- Sentence length: mean ${p.sentence.mean} words, SD ${p.sentence.sd} (coefficient of variation ${p.sentence.cv}); range ${p.sentence.min}–${p.sentence.max}; ${p.sentence.shortPct}% short (<8 words), ${p.sentence.longPct}% long (>25 words)`,
+    `- Sentences per paragraph: ~${p.paraSentences}`,
+    `- Favourite connectors (most used first): ${p.connectors.map(c => c.w).join(', ') || 'n/a'}`,
+    `- Typical openings: ${p.greetings.join(', ') || 'n/a'}; typical sign-offs: ${p.signoffs.join(', ') || 'n/a'}`,
+    `- Form of address: ${p.address}; formality: ${fl} (${p.formality.score}/100)`,
+    `- Punctuation per 100 words: commas ${p.punct.comma}, semicolons ${p.punct.semicolon}, colons ${p.punct.colon}, em dashes ${p.punct.emDash}, spaced hyphens ${p.punct.dash}, ellipses ${p.punct.ellipsis}, exclamation marks ${p.punct.exclaim}, question marks ${p.punct.question}, parentheses ${p.punct.paren}; quote style: ${p.quoteStyle}`,
+    `- First-person singular per 100 words: ${p.firstPerson}`,
+    `- Phrases the writer likes (use naturally, not forcibly): ${[...p.favorites, ...splitList(p.extraFav)].join('; ') || 'n/a'}`,
+    `- Phrases the writer never uses (avoid): ${[...p.neverUsed, ...splitList(p.extraAvoid)].join('; ') || 'n/a'}`
+  ];
+  if (p.notes) L.push(`- Writer's own notes: ${p.notes}`);
+  return L.join('\n');
+}
+const splitList = s => (s || '').split(/[,;\n]/).map(x => x.trim()).filter(Boolean);
+
+/* ============================================================================
+   2. YAPAY ZEKÂ İZİ ANALİZİ
+   --------------------------------------------------------------------------
+   Her kategori 0–100 arası puan alır. Puanlar sezgiseldir (heuristik): bir
+   "yapay zekâ dedektörü" değil, metni insansı kılmak için yol gösterici
+   bir kontrol listesidir. "s" = önerilen doğal karşılık (araç ipucu).
+   ========================================================================== */
+const CLICHES = {
+  tr: [
+    { p: 'ayrıca', s: 'bir de / üstelik / hiç bağlaç kullanma' }, { p: 'sonuç olarak', s: 'kısacası / doğrudan sonucu söyle' },
+    { p: 'önemli bir rol oyna~', s: '… işe yarıyor / … etkili' }, { p: 'önemli rol oyna~', s: '… işe yarıyor' }, { p: 'kilit rol oyna~', s: '… belirleyici' },
+    { p: 'günümüzde', s: 'artık / bugün / bu yıl' }, { p: 'bu bağlamda', s: 'bu yüzden / burada' }, { p: 'kapsamlı~', s: 'geniş / ayrıntılı / tam' },
+    { p: 'çok yönlü', s: 'farklı açılardan / birkaç işe yarayan' }, { p: 'büyük önem taşı~', s: 'önemli / şart' }, { p: 'büyük önem arz e~', s: 'önemli' },
+    { p: 'göz ardı edilmemeli~', s: 'unutmayalım' }, { p: 'unutulmamalıdır ki', s: '(sil)' }, { p: 'şunu belirtmek gerekir ki', s: '(sil)' },
+    { p: 'belirtmek gerekir', s: '(sil)' }, { p: 'son derece', s: 'çok / oldukça' }, { p: 'hayati önem', s: 'çok önemli' }, { p: 'kritik öneme sahip~', s: 'çok önemli' },
+    { p: 'ön plana çık~', s: 'öne çıkıyor' }, { p: 'katkı sağla~', s: 'katkı veriyor / yardımcı oluyor' }, { p: 'değerli bir kaynak', s: 'işe yarar bir kaynak' },
+    { p: 'dönüştürücü', s: 'değiştiren' }, { p: 'bunun yanı sıra', s: 'bir de' }, { p: 'bununla birlikte', s: 'yine de / ama' }, { p: 'öte yandan', s: 'ama / diğer taraftan' },
+    { p: 'özetle', s: 'kısacası' }, { p: 'nihayetinde', s: 'sonunda' }, { p: 'sonuç itibarıyla', s: 'sonuçta' }, { p: 'potansiyel taşı~', s: 'olabilir' },
+    { p: 'fırsat sun~', s: 'imkân veriyor' }, { p: 'eşsiz', s: '(somut özellik yaz)' }, { p: 'benzersiz', s: '(somut özellik yaz)' }, { p: 'vazgeçilmez', s: 'çok gerekli' },
+    { p: 'köşe taşı', s: 'temel' }, { p: 'ışık tut~', s: 'gösteriyor / açıklıyor' }, { p: 'derinlemesine', s: 'ayrıntılı' }, { p: 'bütüncül', s: 'bir bütün olarak' },
+    { p: 'sinerji', s: 'birlikte çalışma' }, { p: 'zenginleştir~', s: 'geliştir' }, { p: 'yolculuğ~', s: 'süreç' }, { p: 'dinamik bir', s: '(somut anlat)' },
+    { p: 'hızla değişen dünya~', s: '(sil)' }, { p: 'dijital çağ~', s: 'bugün' }, { p: 'en önemlisi', s: '(sil ya da somutlaştır)' }, { p: 'söz konusu', s: 'bu' },
+    { p: 'ele alındığında', s: 'bakınca' }, { p: 'ele almak~', s: 'incelemek' }, { p: 'altını çiz~', s: 'vurgula' }, { p: 'bu doğrultuda', s: 'bu yüzden' },
+    { p: 'sağlam bir temel', s: 'iyi bir başlangıç' }, { p: 'olmazsa olmaz', s: 'şart' }, { p: 'gerek … gerekse', s: 'hem … hem' }
+  ],
+  en: [
+    { p: 'delve~', s: 'look at / dig into' }, { p: 'tapestry', s: 'mix' }, { p: 'crucial', s: 'important / key' }, { p: 'pivotal', s: 'key' },
+    { p: "in today's fast-paced world", s: '(cut)' }, { p: "in today's digital age", s: '(cut)' }, { p: "in today's world", s: 'now' },
+    { p: "it's worth noting", s: '(cut)' }, { p: 'it is worth noting', s: '(cut)' }, { p: "it's important to note", s: '(cut)' }, { p: 'it is important to note', s: '(cut)' },
+    { p: 'furthermore', s: 'also / and' }, { p: 'moreover', s: 'also / plus' }, { p: 'additionally', s: 'also' }, { p: 'seamless~', s: 'smooth' },
+    { p: 'robust', s: 'solid / strong' }, { p: 'leverag~', s: 'use' }, { p: 'utiliz~', s: 'use' }, { p: 'navigat~ the complexities', s: 'deal with' },
+    { p: 'landscape', s: 'field / scene' }, { p: 'realm', s: 'area' }, { p: 'testament to', s: 'shows' }, { p: 'unlock~', s: 'open / get' },
+    { p: 'unleash~', s: 'release' }, { p: 'elevate~', s: 'improve' }, { p: 'embark~', s: 'start' }, { p: 'game-changer', s: '(be specific)' },
+    { p: 'cutting-edge', s: 'new / latest' }, { p: 'comprehensive', s: 'full / thorough' }, { p: 'multifaceted', s: 'complex' }, { p: 'foster~', s: 'build / encourage' },
+    { p: 'holistic', s: 'whole' }, { p: 'in conclusion', s: '(cut, just conclude)' }, { p: 'ultimately', s: 'in the end' }, { p: 'nuanced', s: 'subtle' },
+    { p: 'intricate', s: 'complex' }, { p: 'ever-evolving', s: 'changing' }, { p: 'vibrant', s: 'lively' }, { p: 'showcas~', s: 'show' },
+    { p: 'underscor~', s: 'show / stress' }, { p: 'paramount', s: 'most important' }, { p: 'myriad', s: 'many' }, { p: 'a plethora of', s: 'lots of' },
+    { p: 'at the end of the day', s: '(cut)' }, { p: 'stands as', s: 'is' }, { p: 'serves as', s: 'is' }, { p: 'boast~', s: 'has' },
+    { p: 'plays a vital role', s: 'matters' }, { p: 'plays a crucial role', s: 'matters' }, { p: 'plays a key role', s: 'matters' }, { p: 'a rich', s: '(be specific)' },
+    { p: 'empower~', s: 'help / let' }, { p: 'streamlin~', s: 'simplify' }, { p: 'harness~', s: 'use' }, { p: 'meticulous~', s: 'careful' },
+    { p: 'invaluable', s: 'very useful' }, { p: 'transformative', s: '(be specific)' }, { p: 'navigate~', s: 'handle' }, { p: 'dive into', s: 'look at' }
+  ]
+};
+const HEDGES = {
+  tr: ['olabilir', 'olabilmektedir', 'genellikle', 'genelde', 'muhtemelen', 'bir ölçüde', 'belirli ölçüde', 'kısmen', 'çoğu zaman', 'bazı durumlarda',
+       'denilebilir', 'söylenebilir', 'düşünülebilir', 'sağlayabilir', 'yardımcı olabilir', 'katkıda bulunabilir', 'gerekebilir', 'mümkündür', 'olası'],
+  en: ['might', 'may', 'could potentially', 'potentially', 'generally', 'typically', 'often', 'arguably', 'perhaps', 'to some extent', 'in many cases',
+       'it can be said', 'tends to', 'somewhat', 'relatively', 'can help', 'it seems']
+};
+const CONCLUSION_OPENERS = ['Sonuç olarak', 'Özetle', 'Kısacası', 'Sonuçta', 'Nihayetinde', 'Genel olarak', 'Tüm bunlar', 'Bütün bunlar',
+  'In conclusion', 'Overall', 'In summary', 'To sum up', 'Ultimately', 'All in all', 'In short'];
+const INVIS = { '\u200B': 'ZWSP', '\u200C': 'ZWNJ', '\u200D': 'ZWJ', '\uFEFF': 'BOM', '\u2060': 'WJ', '\u00AD': 'SHY', '\u00A0': 'NBSP', '\u202F': 'NNBSP', '\u2007': 'FIGSP', '\u180E': 'MVS' };
+const CATS = [
+  { id: 'cliche', color: 'var(--c-cliche)', w: .25 }, { id: 'burst', color: 'var(--c-burst)', w: .20 }, { id: 'triad', color: 'var(--c-triad)', w: .15 },
+  { id: 'format', color: 'var(--c-format)', w: .10 }, { id: 'hedge', color: 'var(--c-hedge)', w: .20 }, { id: 'invis', color: 'var(--c-invis)', w: .10 }
+];
+
+/** Ana analiz fonksiyonu → { lang, words, sentences, scores:{cat:{score,why}}, overall, spans:[{start,end,cat,tip}] } */
+function analyze(text, langHint) {
+  const lang = langHint && langHint !== 'auto' ? langHint : detectLang(text);
+  const sents = splitSentences(text);
+  const words = wordsOf(text); const wc = Math.max(1, words.length);
+  const per100 = n => n / wc * 100;
+  const spans = []; const scores = {};
+  const T = UI === 'en';
+  const addMatches = (re, cat, tip) => { let m; re.lastIndex = 0; while ((m = re.exec(text))) { if (!m[0]) { re.lastIndex++; continue; } spans.push({ start: m.index, end: m.index + m[0].length, cat, tip: typeof tip === 'function' ? tip(m) : tip }); } };
+
+  // --- (a) Klişeler: her iki dilin listesi taranır (karma metinler için) ---
+  let cl = 0; const clFound = new Map();
+  for (const L of ['tr', 'en']) for (const c of CLICHES[L]) {
+    const re = phraseRe(c.p); let m;
+    while ((m = re.exec(text))) {
+      cl++; clFound.set(m[0].toLocaleLowerCase(), (clFound.get(m[0].toLocaleLowerCase()) || 0) + 1);
+      spans.push({ start: m.index, end: m.index + m[0].length, cat: 'cliche', tip: (T ? 'Cliché → ' : 'Klişe → ') + c.s });
+    }
+  }
+  // Sevilen ifadeler/yasaklılar profilden: kullanıcının "asla" listesi de klişe sayılır
+  const prof = store.get('profile');
+  if (prof) for (const a of splitList(prof.extraAvoid)) addMatches(phraseRe(a), 'cliche', T ? 'In your “never use” list' : '“Asla kullanılmasın” listenizde');
+  const top = [...clFound.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, n]) => `“${k}”${n > 1 ? '×' + n : ''}`).join(', ');
+  scores.cliche = { score: clamp(per100(cl) * 28), why: cl ? `${cl} ${T ? 'hits' : 'eşleşme'} (${round(per100(cl))}/100 ${D('words')}): ${top}` : (T ? 'None found.' : 'Bulunmadı.') };
+
+  // --- (b) Tekdüze cümle uzunluğu (burstiness) + simetrik paragraflar ---
+  if (sents.length >= 4) {
+    const lens = sents.map(s => s.words), m = mean(lens), cv = stdev(lens) / (m || 1);
+    let sc = clamp((0.62 - cv) / 0.42 * 100);
+    const reasons = [`${T ? 'mean' : 'ort.'} ${round(m)} ${D('words')}, CV ${round(cv, 2)}`];
+    // Paragraf simetrisi: paragraf başına cümle sayısı neredeyse aynı mı?
+    const paras = splitParagraphs(text).map(p => splitSentences(p).length);
+    if (paras.length >= 3) {
+      const pcv = stdev(paras) / (mean(paras) || 1);
+      if (pcv < 0.2) { sc = clamp(sc + 20); reasons.push(T ? `${paras.length} paragraphs with near-identical length` : `${paras.length} paragraf neredeyse eşit uzunlukta`); }
+    }
+    // Aynı kelimeyle başlayan cümleler
+    const openers = new Map();
+    sents.forEach(s => { const f = (wordsOf(s.text)[0] || '').toLocaleLowerCase('tr'); if (f.length > 1) openers.set(f, [...(openers.get(f) || []), s]); });
+    for (const [w, arr] of openers) if (arr.length >= 3 && arr.length / sents.length >= 0.2) {
+      sc = clamp(sc + 10); reasons.push(T ? `${arr.length} sentences start with “${w}”` : `${arr.length} cümle “${w}” ile başlıyor`);
+      arr.forEach(s => spans.push({ start: s.start, end: s.start + wordsOf(s.text)[0].length, cat: 'burst', tip: T ? 'Repeated sentence opener' : 'Tekrarlanan cümle başı' }));
+    }
+    // Ortalamaya çok yakın uzunluktaki cümleleri dalgalı alt çizgiyle işaretle
+    if (sc >= 40) sents.forEach(s => { if (Math.abs(s.words - m) <= Math.max(2, m * 0.18)) spans.push({ start: s.start, end: s.end, cat: 'burst', tip: (T ? 'Sentence of average length: ' : 'Ortalama uzunlukta cümle: ') + s.words + ' ' + D('words') }); });
+    scores.burst = { score: sc, why: reasons.join('; ') };
+  } else scores.burst = { score: null, why: D('na') };
+
+  // --- (c) Üçlü listeler ve aşırı simetri ---
+  const W = "[\\p{L}\\p{N}'’\\-]+";
+  const item = `${W}(?:\\s${W})?`;   // liste öğesi: 1–2 kelime; son öğe tek kelime (açgözlü eşleşmeyi önler)
+  const triadRe = new RegExp(`(?<![\\p{L}])${item},\\s${item},?\\s(?:ve|veya|ile|ya\\sda|and|or)\\s${W}`, 'gu');
+  let tri = 0; addMatches(triadRe, 'triad', T ? 'Triplet list “X, Y and Z”' : 'Üçlü liste “X, Y ve Z”'); tri = spans.filter(s => s.cat === 'triad').length;
+  const parRe = /\bnot only\b[^.!?]{1,80}\bbut also\b|(?<![\p{L}])(hem|gerek)(?![\p{L}])[^.!?]{1,60}(?<![\p{L}])(hem de|gerekse)(?![\p{L}])|(?<![\p{L}])sadece[^.!?]{1,60}(?<![\p{L}])değil[^.!?]{1,40}aynı zamanda|\bnot just\b[^.!?]{1,60}\bbut\b/giu;
+  const before = spans.length; addMatches(parRe, 'triad', T ? 'Symmetric construction' : 'Simetrik yapı'); const par = spans.length - before;
+  const rate = (tri + par * 0.8) / Math.max(1, sents.length);
+  scores.triad = { score: clamp(rate * 260), why: `${tri} ${T ? 'triplets' : 'üçlü liste'}, ${par} ${T ? 'parallel constructions' : 'paralel yapı'} / ${sents.length} ${D('sentences')}` };
+
+  // --- (d) Biçim artıkları: uzun tire, **kalın**, # başlık, madde işareti, `kod` ---
+  const fBefore = spans.length;
+  addMatches(/—/g, 'format', T ? 'Em dash' : 'Uzun tire'); const em = spans.length - fBefore;
+  addMatches(/\*\*[^*\n]+\*\*|__[^_\n]+__/g, 'format', T ? 'Markdown bold' : 'Markdown kalın yazı');
+  addMatches(/^#{1,6}\s.*$/gm, 'format', T ? 'Markdown heading' : 'Markdown başlık');
+  addMatches(/^\s*(?:[-*•▪◦]|\d+[.)])\s/gm, 'format', T ? 'Bullet / numbered item' : 'Madde işareti');
+  addMatches(/`[^`\n]+`/g, 'format', T ? 'Code formatting' : 'Kod biçimi');
+  addMatches(/(?<!\*)\*(?!\s)[^*\n]{1,60}(?<!\s)\*(?!\*)/g, 'format', T ? 'Markdown italic' : 'Markdown italik');
+  const lines = text.split('\n').filter(l => l.trim()).length || 1;
+  const bullets = (text.match(/^\s*(?:[-*•▪◦]|\d+[.)])\s/gm) || []).length;
+  const bold = (text.match(/\*\*[^*\n]+\*\*|__[^_\n]+__/g) || []).length;
+  const heads = (text.match(/^#{1,6}\s/gm) || []).length;
+  const other = spans.length - fBefore - em;
+  scores.format = { score: clamp(per100(em) * 45 + bold * 12 + heads * 15 + (bullets / lines) * 80 + (other - bold - heads - bullets) * 10),
+    why: `${em} ${T ? 'em dashes' : 'uzun tire'}, ${bold} ${T ? 'bold' : 'kalın'}, ${heads} ${T ? 'headings' : 'başlık'}, ${bullets} ${T ? 'bullets' : 'madde'}` };
+
+  // --- (e) Temkinli/boş dil + genel sonuç paragrafı + somutluk eksikliği ---
+  let hd = 0;
+  for (const L of ['tr', 'en']) for (const h of HEDGES[L]) {
+    const b = spans.length; addMatches(phraseRe(h), 'hedge', T ? 'Hedging' : 'Aşırı temkinli dil'); hd += spans.length - b;
+  }
+  const paras = splitParagraphs(text);
+  let genericEnd = false;
+  if (paras.length >= 2) {
+    const last = paras[paras.length - 1];
+    if (CONCLUSION_OPENERS.some(o => phraseRe(o).test(last.slice(0, 40)))) {
+      genericEnd = true;
+      const st = text.lastIndexOf(last);
+      spans.push({ start: st, end: st + last.length, cat: 'hedge', tip: T ? 'Generic conclusion paragraph — say something specific or cut it' : 'Genel/boş sonuç paragrafı — somut bir şey söyleyin ya da silin' });
+    }
+  }
+  // Somutluk: sayılar, tarih, özel adlar (cümle başı olmayan büyük harfli kelimeler)
+  const nums = (text.match(/\d+/g) || []).length;
+  let proper = 0;
+  for (const s of sents) { const w = wordsOf(s.text); for (let i = 1; i < w.length; i++) if (/^\p{Lu}/u.test(w[i])) proper++; }
+  const concrete = per100(nums + proper);
+  let hs = per100(hd) * 16 + (genericEnd ? 30 : 0) + (concrete < 1 ? 30 : concrete < 2.5 ? 15 : 0);
+  scores.hedge = { score: clamp(hs), why: `${hd} ${T ? 'hedges' : 'temkinli ifade'}${genericEnd ? (T ? ', generic conclusion' : ', genel sonuç paragrafı') : ''}; ${T ? 'concreteness' : 'somutluk'} ${round(concrete)}/100 ${D('words')}` };
+
+  // --- (f) Görünmez karakterler ve tutarsız tırnaklar ---
+  let inv = 0; const invKinds = new Map();
+  for (let i = 0; i < text.length; i++) {
+    const n = INVIS[text[i]];
+    if (n) { inv++; invKinds.set(n, (invKinds.get(n) || 0) + 1); spans.push({ start: i, end: i + 1, cat: 'invis', tip: `U+${text.charCodeAt(i).toString(16).toUpperCase().padStart(4, '0')} ${n}` }); }
+  }
+  const qKinds = [/"/.test(text), /[“”]/.test(text), /[«»]/.test(text), /[„]/.test(text)].filter(Boolean).length;
+  const aKinds = [/(?<=\p{L})'(?=\p{L})/u.test(text), /(?<=\p{L})’(?=\p{L})/u.test(text)].filter(Boolean).length;
+  if (qKinds > 1) addMatches(/["“”«»„]/g, 'invis', T ? 'Mixed quotation-mark styles' : 'Karışık tırnak biçimi');
+  if (aKinds > 1) addMatches(/(?<=\p{L})['’](?=\p{L})/gu, 'invis', T ? 'Mixed apostrophes' : 'Karışık kesme işareti');
+  const hard = [...invKinds.entries()].filter(([k]) => !['NBSP', 'NNBSP'].includes(k)).reduce((s, [, n]) => s + n, 0);
+  scores.invis = { score: clamp((hard ? 60 + hard * 4 : 0) + (inv - hard) * 6 + (qKinds > 1 ? 25 : 0) + (aKinds > 1 ? 15 : 0)),
+    why: inv || qKinds > 1 || aKinds > 1 ? [[...invKinds.entries()].map(([k, n]) => `${k}×${n}`).join(', '), qKinds > 1 ? (T ? 'mixed quotes' : 'karışık tırnak') : '', aKinds > 1 ? (T ? 'mixed apostrophes' : 'karışık kesme') : ''].filter(Boolean).join('; ') : (T ? 'Clean.' : 'Temiz.') };
+
+  // --- Genel skor: puanı hesaplanabilen kategorilerin ağırlıklı ortalaması ---
+  let ws = 0, tot = 0;
+  for (const c of CATS) if (scores[c.id].score != null) { ws += c.w; tot += c.w * scores[c.id].score; }
+  // En kötü kategori genel skoru biraz yukarı çeker (tek büyük iz de önemlidir)
+  const worst = Math.max(...CATS.map(c => scores[c.id].score ?? 0));
+  const overall = Math.round(clamp((ws ? tot / ws : 0) * 0.8 + worst * 0.2));
+  for (const c of CATS) if (scores[c.id].score != null) scores[c.id].score = Math.round(scores[c.id].score);
+  return { lang, words: words.length, sentences: sents.length, scores, overall, spans };
+}
+
+/** Vurgulama: tüm aralıkların sınırlarından parçalar üretilir; çakışan kategoriler birlikte gösterilir. */
+function renderHighlighted(text, spans) {
+  const pts = new Set([0, text.length]);
+  spans.forEach(s => { pts.add(s.start); pts.add(s.end); });
+  const b = [...pts].sort((x, y) => x - y);
+  let html = '';
+  for (let i = 0; i < b.length - 1; i++) {
+    const a = b[i], z = b[i + 1]; if (a === z) continue;
+    const act = spans.filter(s => s.start <= a && s.end >= z);
+    let seg = esc(text.slice(a, z)).replace(/[\u200B\u200C\u200D\uFEFF\u2060\u00AD\u180E]/g, ch => `<span class="invis-glyph">⟦${INVIS[ch]}⟧</span>`)
+      .replace(/[\u00A0\u202F\u2007]/g, '<span class="invis-glyph">⍽</span>');
+    if (act.length) {
+      const cls = [...new Set(act.map(s => 'c-' + s.cat))].join(' ');
+      const tip = [...new Set(act.map(s => s.tip))].join(' · ');
+      html += `<span class="${cls}" title="${esc(tip)}">${seg}</span>`;
+    } else html += seg;
+  }
+  return html;
+}
+
+const level = s => s < 30 ? D('low') : s < 60 ? D('mid') : D('high');
+const levelColor = s => s < 30 ? 'var(--ok)' : s < 60 ? '#d39b1f' : 'var(--danger)';
+
+function renderAnalysis(text, res) {
+  const cards = CATS.map(c => {
+    const s = res.scores[c.id];
+    return `<div class="score"><div class="top"><span><i class="sw" style="background:${c.color}"></i>${esc(D('cat_' + c.id))}</span>
+      <b>${s.score == null ? '–' : s.score}</b></div>
+      <div class="bar"><i style="width:${s.score ?? 0}%;background:${s.score == null ? 'transparent' : levelColor(s.score)}"></i></div>
+      <div class="why">${esc(s.why)}</div></div>`;
+  }).join('');
+  $('#analysisOut').innerHTML = `
+    <div class="card">
+      <div class="overall">
+        <div class="gauge" style="background:conic-gradient(${levelColor(res.overall)} ${res.overall * 3.6}deg,var(--surface-2) 0)">
+          <div style="background:var(--surface);width:72px;height:72px;border-radius:50%;display:grid;place-items:center">${res.overall}<small>/100</small></div></div>
+        <div><h2 style="margin:0">${esc(D('overall'))}: ${esc(level(res.overall))}</h2>
+          <div class="muted">${res.words} ${D('words')} · ${res.sentences} ${D('sentences')} · ${res.lang.toUpperCase()}</div></div>
+      </div>
+      <div class="scores">${cards}</div>
+    </div>
+    <div class="card">
+      <h2>${esc(D('highlighted'))}</h2>
+      <div class="legend">${CATS.map(c => `<span><i class="sw" style="display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px;background:${c.color}"></i>${esc(D('cat_' + c.id))}</span>`).join('')}</div>
+      <div class="hl">${renderHighlighted(text, res.spans)}</div>
+    </div>`;
+  $('#langBadge').textContent = res.lang === 'tr' ? 'Türkçe algılandı' : 'English detected';
+}
+
+/* ============================================================================
+   5. TEMİZLİK ARAÇLARI
+   ========================================================================== */
+
+/** Metin temizliği. Dönüş: { text, changes } */
+function cleanText(text, o) {
+  let n = 0; const rep = (re, to) => { text = text.replace(re, (...a) => { n++; return typeof to === 'function' ? to(...a) : to; }); };
+  if (o.invis) rep(/[\u200B\u200C\u200D\uFEFF\u2060\u00AD\u180E]/g, '');
+  if (o.nbsp) rep(/[\u00A0\u202F\u2007]/g, ' ');
+  if (o.md) {
+    rep(/\*\*([^*\n]+)\*\*/g, '$1'); rep(/__([^_\n]+)__/g, '$1');
+    rep(/^#{1,6}\s+/gm, ''); rep(/`([^`\n]+)`/g, '$1');
+    rep(/(?<![*\w])\*(?!\s)([^*\n]{1,60}?)(?<!\s)\*(?![*\w])/g, '$1');
+    rep(/^\s*[-*•▪◦]\s+/gm, ''); rep(/^\s*>\s?/gm, ''); rep(/^\s*(-{3,}|\*{3,})\s*$/gm, '');
+  }
+  if (o.dash) { rep(/\s*—\s*(?=[\p{Ll}])/gu, ', '); rep(/\s*—\s*/g, ' - '); }
+  if (o.quotes) {
+    // Baskın stile göre: kıvrık tırnak daha çoksa hepsi kıvrık, değilse düz
+    const curly = (text.match(/[“”]/g) || []).length, straight = (text.match(/"/g) || []).length;
+    if (curly && straight) {
+      if (curly >= straight) { let open = true; rep(/"/g, () => (open = !open) ? '”' : '“'); }
+      else rep(/[“”„]/g, '"');
+    }
+    const ca = (text.match(/(?<=\p{L})’(?=\p{L})/gu) || []).length, sa = (text.match(/(?<=\p{L})'(?=\p{L})/gu) || []).length;
+    if (ca && sa) { if (ca >= sa) rep(/(?<=\p{L})'(?=\p{L})/gu, '’'); else rep(/(?<=\p{L})’(?=\p{L})/gu, "'"); }
+  }
+  if (o.spaces) { rep(/[ \t]+$/gm, ''); rep(/(?<=\S) {2,}/g, ' '); rep(/\n{3,}/g, '\n\n'); }
+  return { text, changes: n };
+}
+const cleanOpts = () => ({ invis: $('#clInvis').checked, nbsp: $('#clNbsp').checked, quotes: $('#clQuotes').checked, md: $('#clMd').checked, dash: $('#clDash').checked, spaces: $('#clSpaces').checked });
+
+/** JSZip'i yalnızca gerektiğinde yükle (sabit sürüm). */
+let jszipP = null;
+function loadJSZip() {
+  if (window.JSZip) return Promise.resolve(window.JSZip);
+  return jszipP ||= new Promise((ok, no) => {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js';
+    s.onload = () => ok(window.JSZip); s.onerror = () => { jszipP = null; no(new Error(D('libFail'))); };
+    document.head.appendChild(s);
+  });
+}
+const xmlDecode = s => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&amp;/g, '&');
+const xmlEsc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** .docx → düz metin (paragraflar boş satırla ayrılır). Silinmiş (w:del) metin alınmaz. */
+async function docxToText(file) {
+  const JSZip = await loadJSZip();
+  const zip = await JSZip.loadAsync(file);
+  let xml = await zip.file('word/document.xml').async('string');
+  xml = xml.replace(/<w:del\b[^>]*>[\s\S]*?<\/w:del>/g, '');
+  return xml.split(/<\/w:p>/).map(p => {
+    let t = '';
+    p.replace(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>|<w:tab\/>|<w:br\/>/g, (m, g) => { t += g != null ? xmlDecode(g) : m.startsWith('<w:tab') ? '\t' : '\n'; return ''; });
+    return t;
+  }).filter((t, i, a) => t.trim() || (i && a[i - 1].trim())).join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/**
+ * .docx meta veri temizliği.
+ *  - docProps/core.xml: yazar, son düzenleyen, revizyon, tarih, başlık, anahtar kelimeler → boş/temiz şablon
+ *  - docProps/app.xml: uygulama, şirket, yönetici, toplam düzenleme süresi, şablon → temiz şablon
+ *  - docProps/custom.xml, word/people.xml: tamamen silinir (ilişkileri ve içerik türleriyle)
+ *  - word/*.xml: w:rsid* öznitelikleri, w:author/w:initials/w:date, w14:paraId vb.
+ *  - İzlenen değişiklikler (isteğe bağlı): w:ins açılır, w:del silinir, *Change kayıtları kaldırılır
+ */
+async function cleanDocx(file, opt) {
+  const JSZip = await loadJSZip();
+  const zip = await JSZip.loadAsync(file);
+  const found = [];
+  const read = async p => zip.file(p) ? zip.file(p).async('string') : null;
+
+  const core = await read('docProps/core.xml');
+  if (core) {
+    for (const tag of ['dc:creator', 'cp:lastModifiedBy', 'cp:revision', 'dcterms:created', 'dcterms:modified', 'dc:title', 'dc:subject', 'cp:keywords', 'dc:description', 'cp:category', 'cp:lastPrinted', 'cp:contentStatus']) {
+      const m = core.match(new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`));
+      if (m && m[1].trim()) found.push(`${tag.split(':')[1]}: ${xmlDecode(m[1])}`);
+    }
+    zip.file('docProps/core.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"></cp:coreProperties>`);
+  }
+  const app = await read('docProps/app.xml');
+  if (app) {
+    for (const tag of ['Application', 'AppVersion', 'Company', 'Manager', 'TotalTime', 'Template', 'HyperlinkBase']) {
+      const m = app.match(new RegExp(`<${tag}>([^<]*)</${tag}>`));
+      if (m && m[1].trim() && !(tag === 'TotalTime' && m[1] === '0')) found.push(`${tag}: ${xmlDecode(m[1])}`);
+    }
+    zip.file('docProps/app.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"></Properties>`);
+  }
+  // Tamamen silinecek parçalar
+  const dropParts = ['docProps/custom.xml', 'word/people.xml', 'docProps/thumbnail.jpeg', 'docProps/thumbnail.emf', 'docProps/thumbnail.wmf'];
+  if (opt.comments) dropParts.push('word/comments.xml', 'word/commentsExtended.xml', 'word/commentsIds.xml', 'word/commentsExtensible.xml');
+  for (const p of dropParts) if (zip.file(p)) { zip.remove(p); found.push((UI === 'en' ? 'removed part: ' : 'silinen parça: ') + p); }
+  // İlişki ve içerik türü kayıtlarını, silinen parçalara göre düzelt
+  const dropNames = dropParts.map(p => p.split('/').pop());
+  for (const relPath of ['_rels/.rels', 'word/_rels/document.xml.rels']) {
+    let r = await read(relPath); if (!r) continue;
+    r = r.replace(/<Relationship\b[^>]*\/>/g, rel => dropNames.some(n => rel.includes(`Target="${n}"`) || rel.includes(`/${n}"`)) ? '' : rel);
+    zip.file(relPath, r);
+  }
+  let ct = await read('[Content_Types].xml');
+  if (ct) { ct = ct.replace(/<Override\b[^>]*\/>/g, o => dropParts.some(p => o.includes(`PartName="/${p}"`)) ? '' : o); zip.file('[Content_Types].xml', ct); }
+
+  // word/*.xml içindeki revizyon kimlikleri, yazarlar, tarihler, izlenen değişiklikler
+  let rsid = 0, authors = new Set(), ins = 0, del = 0, chg = 0;
+  for (const path of Object.keys(zip.files).filter(p => /^word\/[^/]+\.xml$/.test(p))) {
+    let x = await zip.file(path).async('string');
+    x.replace(/w:author="([^"]*)"/g, (_, a) => { if (a) authors.add(xmlDecode(a)); });
+    x = x.replace(/\sw:rsid\w*="[^"]*"/g, () => { rsid++; return ''; });
+    if (path === 'word/settings.xml') {
+      x = x.replace(/<w:rsids>[\s\S]*?<\/w:rsids>/g, '').replace(/<w:trackRevisions\b[^>]*\/>/g, '').replace(/<w:attachedTemplate\b[^>]*\/>/g, '')
+        .replace(/<w:documentProtection\b[^>]*\/>/g, '').replace(/<w:proofState\b[^>]*\/>/g, '');
+    }
+    if (opt.accept) {
+      x = x.replace(/<w:del\b[^>]*\/>/g, '').replace(/<w:del\b[^>]*>[\s\S]*?<\/w:del>/g, () => { del++; return ''; })
+        .replace(/<w:moveFrom\b[^>]*>[\s\S]*?<\/w:moveFrom>/g, () => { del++; return ''; })
+        .replace(/<w:ins\b[^>]*\/>/g, '').replace(/<w:ins\b[^>]*>/g, () => { ins++; return ''; }).replace(/<\/w:ins>/g, '')
+        .replace(/<w:moveTo\b[^>]*>/g, '').replace(/<\/w:moveTo>/g, '')
+        .replace(/<w:(moveFromRange|moveToRange)(Start|End)\b[^>]*\/>/g, '')
+        .replace(/<w:(\w+)Change\b[^>]*>[\s\S]*?<\/w:\1Change>/g, () => { chg++; return ''; })
+        .replace(/<w:(\w+)Change\b[^>]*\/>/g, '');
+    }
+    if (opt.comments && path === 'word/document.xml') {
+      x = x.replace(/<w:comment(RangeStart|RangeEnd)\b[^>]*\/>/g, '').replace(/<w:r\b[^>]*>(?:(?!<\/w:r>)[\s\S])*?<w:commentReference\b[^>]*\/>(?:(?!<\/w:r>)[\s\S])*?<\/w:r>/g, '');
+    }
+    x = x.replace(/\sw:author="[^"]*"/g, ' w:author=""').replace(/\sw:initials="[^"]*"/g, ' w:initials=""').replace(/\sw:date="[^"]*"/g, '');
+    zip.file(path, x);
+  }
+  if (opt.comments) {
+    let rels = await read('word/_rels/document.xml.rels');
+    if (rels) zip.file('word/_rels/document.xml.rels', rels.replace(/<Relationship\b[^>]*Target="comments[^"]*"[^>]*\/>/g, ''));
+    let ct2 = await read('[Content_Types].xml');
+    if (ct2) zip.file('[Content_Types].xml', ct2.replace(/<Override\b[^>]*PartName="\/word\/comments[^"]*"[^>]*\/>/g, ''));
+  }
+  if (authors.size) found.push((UI === 'en' ? 'change/comment authors: ' : 'değişiklik/yorum yazarları: ') + [...authors].join(', '));
+  if (rsid) found.push(`rsid: ${rsid}`);
+  if (ins || del || chg) found.push((UI === 'en' ? 'tracked changes accepted: ' : 'kabul edilen izlenen değişiklik: ') + `+${ins} / −${del} / ~${chg}`);
+
+  // Sabit tarih → dosya içi zaman damgaları da kimlik bilgisi vermesin
+  const fixed = new Date(Date.UTC(2000, 0, 1));
+  zip.forEach((_, f) => { f.date = fixed; });
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+  return { blob, found };
+}
+
+/** Düz metinden asgari, meta verisiz .docx üretir. */
+async function textToDocx(text) {
+  const JSZip = await loadJSZip();
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>');
+  zip.file('_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>');
+  const paras = text.replace(/\r/g, '').split('\n').map(line =>
+    line ? `<w:p><w:r><w:t xml:space="preserve">${xmlEsc(line)}</w:t></w:r></w:p>` : '<w:p/>').join('');
+  zip.file('word/document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${paras}<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" w:header="708" w:footer="708" w:gutter="0"/></w:sectPr></w:body></w:document>`);
+  return zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+}
+
+function download(blob, name) {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/* ============================================================================
+   3. YENİDEN YAZMA MOTORU
+   ========================================================================== */
+/* === REWRITE ENGINE (2. aşama) === */
+async function rewrite() { toast(D('rwSoon')); }
+async function aiMeaningCheck() { toast(D('rwSoon')); }
+
+/* ============================================================================
+   4. KARŞILAŞTIRMA: diff, kabul/ret, skor değişimi, anlam kontrolü
+   ========================================================================== */
+
+/** Kelime + boşluk + noktalama belirteçleri */
+const tokenize = s => s.match(/\s+|[\p{L}\p{N}'’]+|[^\s\p{L}\p{N}]/gu) || [];
+
+/**
+ * LCS tabanlı diff. Ortak baş/son kırpılır; büyük metinlerde bellek için
+ * cümle düzeyine düşülür. Çıktı: [{t:'eq',s}|{t:'hunk',del,ins,acc:true}]
+ */
+function diff(a, b) {
+  let A = tokenize(a), B = tokenize(b);
+  if (A.length * B.length > 9e6) { const sp = s => s.match(/[^.!?\n]+[.!?]*\s*|\n+/g) || []; A = sp(a); B = sp(b); }
+  let pre = 0; while (pre < A.length && pre < B.length && A[pre] === B[pre]) pre++;
+  let suf = 0; while (suf < A.length - pre && suf < B.length - pre && A[A.length - 1 - suf] === B[B.length - 1 - suf]) suf++;
+  const a2 = A.slice(pre, A.length - suf), b2 = B.slice(pre, B.length - suf);
+  const n = a2.length, m = b2.length, W = m + 1;
+  const L = (n + 1) * (m + 1) > 4e7 ? null : new Uint16Array((n + 1) * (m + 1));
+  const ops = [];
+  if (!L) { ops.push({ t: 'del', s: a2.join('') }, { t: 'ins', s: b2.join('') }); }
+  else {
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+      L[i * W + j] = a2[i] === b2[j] ? L[(i + 1) * W + j + 1] + 1 : Math.max(L[(i + 1) * W + j], L[i * W + j + 1]);
+    let i = 0, j = 0;
+    while (i < n && j < m) {
+      if (a2[i] === b2[j]) { ops.push({ t: 'eq', s: a2[i] }); i++; j++; }
+      else if (L[(i + 1) * W + j] >= L[i * W + j + 1]) ops.push({ t: 'del', s: a2[i++] });
+      else ops.push({ t: 'ins', s: b2[j++] });
+    }
+    while (i < n) ops.push({ t: 'del', s: a2[i++] });
+    while (j < m) ops.push({ t: 'ins', s: b2[j++] });
+  }
+  const all = [{ t: 'eq', s: A.slice(0, pre).join('') }, ...ops, { t: 'eq', s: A.slice(A.length - suf).join('') }];
+  // Ardışık değişiklikleri "hunk"lara topla; aradaki tek boşluk/kısa ortak parçayı yut (okunurluk)
+  const out = [];
+  for (const o of all) {
+    if (!o.s) continue;
+    const last = out[out.length - 1];
+    if (o.t === 'eq') { if (last && last.t === 'eq') last.s += o.s; else out.push({ t: 'eq', s: o.s }); }
+    else {
+      if (last && last.t === 'hunk') last[o.t] += o.s;
+      else if (last && last.t === 'eq' && /^\s+$/.test(last.s) && out[out.length - 2]?.t === 'hunk') {
+        const h = out[out.length - 2]; h.del += last.s; h.ins += last.s; out.pop(); h[o.t] += o.s;
+      } else out.push({ t: 'hunk', del: o.t === 'del' ? o.s : '', ins: o.t === 'ins' ? o.s : '', acc: true });
+    }
+  }
+  return out;
+}
+
+let CMP = null; // { original, rewritten, parts }
+const mergedText = () => CMP ? CMP.parts.map(p => p.t === 'eq' ? p.s : (p.acc ? p.ins : p.del)).join('') : '';
+
+function openCompare(original, rewritten) {
+  CMP = { original, rewritten, parts: diff(original, rewritten) };
+  $('#aiMeaningOut').innerHTML = '';
+  renderCompare(); switchTab('compare');
+}
+function renderCompare() {
+  if (!CMP) { $('#compareEmpty').hidden = false; $('#compareOut').hidden = true; return; }
+  $('#compareEmpty').hidden = true; $('#compareOut').hidden = false;
+  let left = '', right = '', list = '', k = 0;
+  CMP.parts.forEach((p, idx) => {
+    if (p.t === 'eq') { left += esc(p.s); right += esc(p.s); return; }
+    k++;
+    left += p.del ? `<del>${esc(p.del)}</del>` : '';
+    right += p.acc ? (p.ins ? `<ins class="hunk" data-i="${idx}" title="${esc(D('reject'))}">${esc(p.ins)}</ins>` : `<ins class="hunk" data-i="${idx}" title="${esc(D('reject'))}">⌫</ins>`)
+                   : `<span class="hunk rej" data-i="${idx}" title="${esc(D('accept'))}">${esc(p.del) || '∅'}</span>`;
+    list += `<li class="${p.acc ? '' : 'rejected'}"><div>${p.del.trim() ? `<span class="o">${esc(p.del.trim())}</span> → ` : ''}${p.ins.trim() ? `<span class="n">${esc(p.ins.trim())}</span>` : `<span class="muted">(${UI === 'en' ? 'deleted' : 'silindi'})</span>`}</div>
+      <div class="row"><button class="btn small" data-acc="${idx}" ${p.acc ? 'disabled' : ''}>✓ ${esc(D('accept'))}</button><button class="btn small" data-rej="${idx}" ${p.acc ? '' : 'disabled'}>✗ ${esc(D('reject'))}</button></div></li>`;
+  });
+  $('#diffLeft').innerHTML = left; $('#diffRight').innerHTML = right; $('#changesList').innerHTML = list;
+  $('#chCount').textContent = `(${CMP.parts.filter(p => p.t === 'hunk' && p.acc).length}/${k})`;
+  renderScoreCompare(); renderMeaning();
+}
+function renderScoreCompare() {
+  const a = analyze(CMP.original), b = analyze(mergedText(), a.lang);
+  const row = (name, x, y) => {
+    if (x == null || y == null) return `<tr><td>${esc(name)}</td><td class="num">${x ?? '–'}</td><td class="num">${y ?? '–'}</td><td class="num">–</td></tr>`;
+    const d = y - x; return `<tr><td>${esc(name)}</td><td class="num">${x}</td><td class="num">${y}</td><td class="num ${d < 0 ? 'delta-good' : d > 0 ? 'delta-bad' : ''}">${d > 0 ? '+' : ''}${d}</td></tr>`;
+  };
+  $('#scoreCompare').innerHTML = `<table class="cmp-table"><tr><th>${esc(D('category'))}</th><th class="num">${esc(D('before'))}</th><th class="num">${esc(D('after'))}</th><th class="num">Δ</th></tr>
+    ${row(D('overall'), a.overall, b.overall)}${CATS.map(c => row(D('cat_' + c.id), a.scores[c.id].score, b.scores[c.id].score)).join('')}</table>`;
+}
+
+/**
+ * Yerel anlam kontrolü: korunması gereken "olgular" çıkarılır ve yeni metinde aranır.
+ * Sayılar, alıntılar, bağlantı/e-postalar, kaynak gösterimleri ve özel adlar.
+ */
+function extractFacts(text) {
+  const f = { numbers: new Set(), quotes: new Set(), urls: new Set(), cites: new Set(), names: new Set() };
+  (text.match(/%\s?\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*\s?%?/g) || []).forEach(n => f.numbers.add(n.replace(/\s/g, '')));
+  for (const m of text.matchAll(/[“"«„]([^”"»“]{4,400})[”"»“]/g)) f.quotes.add(m[1].trim());
+  (text.match(/https?:\/\/\S+|www\.\S+|[\w.+-]+@[\w-]+\.[\w.]+/g) || []).forEach(u => f.urls.add(u.replace(/[.,;)]+$/, '')));
+  (text.match(/\([^()]*\d{4}[a-z]?[^()]*\)/g) || []).forEach(c => f.cites.add(c));
+  for (const s of splitSentences(text)) {
+    const w = wordsOf(s.text);
+    w.forEach((x, i) => {
+      const stem = x.split(/['’]/)[0];
+      if (stem.length < 2) return;
+      if ((i > 0 && /^\p{Lu}/u.test(stem)) || /^\p{Lu}{2,}/u.test(stem) || /^\p{Ll}+\p{Lu}/u.test(stem)) f.names.add(stem);
+    });
+  }
+  return f;
+}
+function meaningIssues(a, b) {
+  const A = extractFacts(a), B = extractFacts(b);
+  const norm = s => s.toLocaleLowerCase('tr').replace(/\s+/g, ' ');
+  const bn = norm(b);
+  const missing = [], added = [];
+  for (const k of Object.keys(A)) for (const v of A[k]) {
+    const present = k === 'names' ? b.includes(v) : k === 'quotes' ? bn.includes(norm(v)) : B[k].has(v) || bn.includes(norm(v));
+    if (!present) missing.push({ k, v });
+  }
+  for (const k of ['numbers', 'names', 'urls', 'cites']) for (const v of B[k]) if (!(k === 'names' ? a.includes(v) : A[k].has(v) || norm(a).includes(norm(v)))) added.push({ k, v });
+  const ph = [...new Set(b.match(/\[[^\]\n]{3,80}\]/g) || [])].filter(p => !a.includes(p));
+  return { missing, added, ph };
+}
+function renderMeaning() {
+  const r = meaningIssues(CMP.original, mergedText());
+  const lab = k => D(k);
+  let h = '';
+  if (!r.missing.length && !r.added.length) h += `<div class="okmsg">${esc(D('meaningOk'))}</div>`;
+  if (r.missing.length) h += `<div class="warn"><b>${esc(D('missing'))}:</b><br>${r.missing.map(x => `${esc(lab(x.k))}: <code>${esc(x.v)}</code>`).join('<br>')}</div>`;
+  if (r.added.length) h += `<div class="warn"><b>${esc(D('added'))}:</b><br>${r.added.map(x => `${esc(lab(x.k))}: <code>${esc(x.v)}</code>`).join('<br>')}</div>`;
+  if (r.ph.length) h += `<div class="okmsg"><b>${esc(D('placeholders'))}:</b><br>${r.ph.map(esc).join('<br>')}</div>`;
+  $('#meaningOut').innerHTML = h;
+}
+
+/* ============================================================================
+   6. ARAYÜZ: sekmeler, profil ekranı, geçmiş, olay bağlama
+   ========================================================================== */
+function switchTab(id) {
+  $$('nav.tabs button').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === id));
+  $$('section.panel').forEach(p => p.classList.toggle('active', p.id === 'p-' + id));
+  store.set('tab', id);
+  if (id === 'rewrite') updateProfileNote();
+  if (id === 'history') renderHistory();
+}
+$$('nav.tabs button').forEach(b => b.onclick = () => switchTab(b.dataset.tab));
+
+function segValue(id) { return $(`#${id} [aria-pressed="true"]`)?.dataset.v; }
+function bindSeg(id, key) {
+  const saved = store.get(key);
+  $$(`#${id} button`).forEach(b => {
+    if (saved) b.setAttribute('aria-pressed', b.dataset.v === saved);
+    b.onclick = () => { $$(`#${id} button`).forEach(x => x.setAttribute('aria-pressed', x === b)); store.set(key, b.dataset.v); };
+  });
+}
+bindSeg('toneSeg', 'tone'); bindSeg('intSeg', 'intensity'); bindSeg('outLangSeg', 'outLang');
+
+// --- Analiz ---
+function runAnalysis() {
+  const text = $('#inputText').value;
+  if (!text.trim()) { toast(D('emptyText')); return null; }
+  const res = analyze(text);
+  renderAnalysis(text, res);
+  addHistory({ original: text, scoreBefore: res.overall });
+  return res;
+}
+$('#btnAnalyze').onclick = runAnalysis;
+$('#inputText').value = store.get('draft', '');
+$('#inputText').addEventListener('input', () => store.set('draft', $('#inputText').value));
+$('#btnQuickClean').onclick = () => {
+  const r = cleanText($('#inputText').value, { invis: true, nbsp: true });
+  $('#inputText').value = r.text; store.set('draft', r.text);
+  toast(r.changes ? D('cleaned')(r.changes) : D('nothingToClean'));
+  if ($('#analysisOut').innerHTML && r.text.trim()) renderAnalysis(r.text, analyze(r.text));
+};
+$('#docxToInput').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const t = await docxToText(f); $('#inputText').value = t; store.set('draft', t); toast(D('loadedDocx')); runAnalysis(); }
+  catch (err) { toast(err.message); }
+  e.target.value = '';
+};
+
+// --- Profil ekranı ---
+function sampleBox(val = '', i = 0) {
+  const d = document.createElement('div');
+  d.innerHTML = `<label class="fld">${esc(D('sample'))} ${i + 1}</label><textarea class="sample" placeholder="${esc(D('samplePh'))}"></textarea>`;
+  d.querySelector('textarea').value = val;
+  return d;
+}
+function renderSamples() {
+  const s = store.get('samples', ['', '', '']);
+  $('#samples').innerHTML = '';
+  s.forEach((v, i) => $('#samples').appendChild(sampleBox(v, i)));
+}
+const readSamples = () => $$('#samples textarea').map(t => t.value);
+$('#btnAddSample').onclick = () => {
+  const n = $$('#samples textarea').length; if (n >= 5) return;
+  $('#samples').appendChild(sampleBox('', n));
+  if (n + 1 >= 5) $('#btnAddSample').disabled = true;
+};
+$('#btnBuildProfile').onclick = () => {
+  const raw = readSamples(); store.set('samples', raw);
+  const s = raw.map(x => x.trim()).filter(Boolean);
+  if (!s.length) { toast(D('needSamples')); return; }
+  const old = store.get('profile');
+  const p = extractProfile(s);
+  if (old) { p.notes = old.notes; p.extraFav = old.extraFav; p.extraAvoid = old.extraAvoid; }
+  store.set('profile', p);
+  renderProfile(); toast(s.length < 3 ? D('fewSamples') : D('profileSaved'));
+};
+$('#btnDeleteProfile').onclick = () => { store.del('profile'); store.del('samples'); renderSamples(); renderProfile(); toast(D('profileDeleted')); };
+
+function renderProfile() {
+  const p = store.get('profile');
+  if (!p) { $('#profileOut').innerHTML = ''; return; }
+  const fl = D('formalLabels')[Math.min(4, Math.floor(p.formality.score / 20))];
+  const addr = { siz: D('addrSiz'), sen: D('addrSen'), mixed: D('addrMixed'), you: D('addrYou'), unknown: D('addrUnknown') }[p.address];
+  const pu = p.punct;
+  const chips = (arr, neg) => arr.length ? `<div class="chips">${arr.map(x => `<span class="chip${neg ? ' neg' : ''}">${esc(x)}</span>`).join('')}</div>` : D('none');
+  $('#profileOut').innerHTML = `
+    <div class="card">
+      <h2>${esc((UI === 'en' ? I18N.en : I18N.tr).profTitle)} · <span class="muted">${p.sampleCount} ${UI === 'en' ? 'samples' : 'örnek'}, ${p.wordCount} ${D('words')}, ${new Date(p.createdAt).toLocaleDateString(UI)}</span></h2>
+      <div class="grid2">
+        <dl class="kv">
+          <dt>${esc(D('sentLen'))}</dt><dd>${p.sentence.mean} ${D('words')} (${p.sentence.min}–${p.sentence.max})</dd>
+          <dt>${esc(D('variation'))}</dt><dd>SD ${p.sentence.sd} · CV ${p.sentence.cv}</dd>
+          <dt>${esc(D('shortLong'))}</dt><dd>%${p.sentence.shortPct} / %${p.sentence.longPct}</dd>
+          <dt>${esc(D('paragraphs'))}</dt><dd>${p.paraSentences}</dd>
+          <dt>${esc(D('address'))}</dt><dd>${esc(addr)}</dd>
+          <dt>${esc(D('formality'))}</dt><dd>${esc(fl)} (${p.formality.score}/100)</dd>
+          <dt>${esc(D('firstPerson'))}</dt><dd>${p.firstPerson}</dd>
+          <dt>${esc(D('quoteStyle'))}</dt><dd>${esc(p.quoteStyle === 'none' ? '—' : D(p.quoteStyle))}</dd>
+        </dl>
+        <dl class="kv">
+          <dt>${esc(D('punct'))}</dt><dd>, ${pu.comma} · ; ${pu.semicolon} · : ${pu.colon} · — ${pu.emDash} · - ${pu.dash} · … ${pu.ellipsis} · ! ${pu.exclaim} · ? ${pu.question} · ( ${pu.paren}</dd>
+          <dt>${esc(D('greetings'))}</dt><dd>${chips(p.greetings)}</dd>
+          <dt>${esc(D('signoffs'))}</dt><dd>${chips(p.signoffs)}</dd>
+        </dl>
+      </div>
+      <h3>${esc(D('connectors'))}</h3>${chips(p.connectors.map(c => `${c.w} ×${c.n}`))}
+      <h3>${esc(D('favorites'))}</h3>${chips(p.favorites)}
+      <h3>${esc(D('never'))}</h3>${chips(p.neverUsed.slice(0, 24), true)}
+      <label class="fld">${esc(D('extraFav'))}</label><input type="text" id="pfFav">
+      <label class="fld">${esc(D('extraAvoid'))}</label><input type="text" id="pfAvoid">
+      <label class="fld">${esc(D('notes'))}</label><textarea id="pfNotes" style="min-height:70px"></textarea>
+      <div class="row" style="margin-top:10px"><button class="btn" id="btnSaveProfileEdits">${esc(D('saveEdits'))}</button></div>
+    </div>`;
+  $('#pfFav').value = p.extraFav || ''; $('#pfAvoid').value = p.extraAvoid || ''; $('#pfNotes').value = p.notes || '';
+  $('#btnSaveProfileEdits').onclick = () => {
+    const q = store.get('profile'); q.extraFav = $('#pfFav').value; q.extraAvoid = $('#pfAvoid').value; q.notes = $('#pfNotes').value;
+    store.set('profile', q); toast(D('profileSaved'));
+  };
+}
+function updateProfileNote() { $('#rwProfileNote').textContent = store.get('profile') ? '✓ ' + D('profileOn') + '.' : D('noProfile'); }
+
+// --- Temizlik ekranı ---
+$('#btnClean').onclick = () => {
+  const r = cleanText($('#inputText').value, cleanOpts());
+  $('#inputText').value = r.text; store.set('draft', r.text);
+  $('#cleanReport').textContent = r.changes ? D('cleaned')(r.changes) : D('nothingToClean');
+};
+$('#docxClean').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const { blob, found } = await cleanDocx(f, { accept: $('#dxAccept').checked, comments: $('#dxComments').checked });
+    download(blob, f.name.replace(/\.docx$/i, '') + (UI === 'en' ? '_clean.docx' : '_temiz.docx'));
+    $('#docxReport').innerHTML = `<div class="okmsg"><b>${esc(D('docxDone'))}.</b></div>` +
+      (found.length ? `<div class="warn"><b>${esc(D('docxFound'))}:</b><br>${found.map(esc).join('<br>')}</div>` : `<p class="muted">${esc(D('docxNone'))}</p>`);
+  } catch (err) { $('#docxReport').innerHTML = `<div class="warn">${esc(err.message)}</div>`; }
+  e.target.value = '';
+};
+
+// --- Karşılaştırma ekranı olayları ---
+const toggleHunk = (i, v) => { const p = CMP.parts[i]; p.acc = v ?? !p.acc; renderCompare(); };
+$('#diffRight').onclick = e => { const h = e.target.closest('.hunk'); if (h) toggleHunk(+h.dataset.i); };
+$('#changesList').onclick = e => {
+  const a = e.target.closest('[data-acc]'), r = e.target.closest('[data-rej]');
+  if (a) toggleHunk(+a.dataset.acc, true); if (r) toggleHunk(+r.dataset.rej, false);
+};
+$('#btnAcceptAll').onclick = () => { CMP.parts.forEach(p => p.t === 'hunk' && (p.acc = true)); renderCompare(); };
+$('#btnRejectAll').onclick = () => { CMP.parts.forEach(p => p.t === 'hunk' && (p.acc = false)); renderCompare(); };
+$('#btnCopy').onclick = async () => {
+  try { await navigator.clipboard.writeText(mergedText()); }
+  catch { const t = document.createElement('textarea'); t.value = mergedText(); document.body.appendChild(t); t.select(); document.execCommand('copy'); t.remove(); }
+  toast(D('copied'));
+};
+const fileStem = () => 'dogal-kalem-' + new Date().toISOString().slice(0, 10);
+$('#btnTxt').onclick = () => download(new Blob([mergedText()], { type: 'text/plain;charset=utf-8' }), fileStem() + '.txt');
+$('#btnDocx').onclick = async () => { try { download(await textToDocx(mergedText()), fileStem() + '.docx'); } catch (e) { toast(e.message); } };
+$('#btnToInput').onclick = () => { const t = mergedText(); $('#inputText').value = t; store.set('draft', t); switchTab('analyze'); runAnalysis(); };
+$('#btnAiMeaning').onclick = () => aiMeaningCheck();
+
+// --- Geçmiş (son 10) ---
+function addHistory(entry) {
+  const h = store.get('history', []);
+  const key = entry.original.trim().slice(0, 2000);
+  const i = h.findIndex(x => x.original.trim().slice(0, 2000) === key);
+  const base = i >= 0 ? h.splice(i, 1)[0] : { id: Date.now().toString(36) };
+  const e = { ...base, ...entry, date: Date.now() };
+  h.unshift(e); store.set('history', h.slice(0, 10));
+}
+function renderHistory() {
+  const h = store.get('history', []);
+  $('#historyList').innerHTML = h.length ? h.map((e, i) => `<li>
+      <div class="t"><b>${esc(e.original.trim().slice(0, 90))}</b>
+        <small>${new Date(e.date).toLocaleString(UI)} · ${esc(D('score'))} ${e.scoreBefore ?? '–'}${e.scoreAfter != null ? ' → ' + e.scoreAfter : ''}${e.tone ? ' · ' + esc(e.tone) : ''}</small></div>
+      <button class="btn small" data-load="${i}">${esc(D('load'))}</button><button class="btn small" data-del="${i}">${esc(D('del'))}</button></li>`).join('')
+    : `<li class="muted">${esc(D('histEmpty'))}</li>`;
+}
+$('#historyList').onclick = e => {
+  const h = store.get('history', []);
+  const l = e.target.closest('[data-load]'), d = e.target.closest('[data-del]');
+  if (l) {
+    const x = h[+l.dataset.load];
+    $('#inputText').value = x.original; store.set('draft', x.original);
+    if (x.result) { renderAnalysis(x.original, analyze(x.original)); openCompare(x.original, x.result); }
+    else { switchTab('analyze'); runAnalysis(); }
+  }
+  if (d) { h.splice(+d.dataset.del, 1); store.set('history', h); renderHistory(); }
+};
+$('#btnClearHist').onclick = () => { store.set('history', []); renderHistory(); };
+
+// --- Ayarlar ---
+function applyTheme() { const t = store.get('theme', ''); if (t) document.documentElement.dataset.theme = t; else delete document.documentElement.dataset.theme; }
+$('#btnSettings').onclick = () => { $('#apiKey').value = store.get('apiKey', ''); $('#model').value = store.get('model', 'claude-opus-5-5'); $('#theme').value = store.get('theme', ''); $('#dlgSettings').showModal(); };
+$('#btnCloseSettings').onclick = () => $('#dlgSettings').close();
+$('#btnSaveSettings').onclick = () => { store.set('apiKey', $('#apiKey').value.trim()); store.set('model', $('#model').value); store.set('theme', $('#theme').value); applyTheme(); $('#dlgSettings').close(); toast(D('settingsSaved')); };
+$('#btnLang').onclick = () => {
+  UI = UI === 'tr' ? 'en' : 'tr'; store.set('uiLang', UI); applyI18n();
+  renderSamples(); renderProfile(); updateProfileNote();
+  if ($('#analysisOut').innerHTML && $('#inputText').value.trim()) renderAnalysis($('#inputText').value, analyze($('#inputText').value));
+  if (CMP) renderCompare();
+  renderHistory();
+};
+$('#btnRewrite').onclick = () => rewrite();
+
+// --- Başlangıç ---
+applyTheme(); applyI18n(); renderSamples(); renderProfile(); updateProfileNote();
+switchTab(store.get('tab', 'analyze') === 'compare' ? 'analyze' : store.get('tab', 'analyze'));
+renderCompare();
+
+// Test/hata ayıklama için konsoldan erişim
+window.DK = { analyze, extractProfile, cleanText, diff, meaningIssues, splitSentences, detectLang };
+</script>
+</body>
+</html>
